@@ -5,12 +5,47 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Game</title>
   <style>
-    html, body { margin: 0; padding: 0; background: #0d0d0d; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
-    #app { line-height: 0; }
+    :root{
+      --page:#0d0d0d; --panel:#181c15; --border:rgba(255,255,255,0.10);
+      --ink:#f2f2f0; --ink-2:#a9ada4; --accent:#4fd1ff; --good:#7fd97f;
+    }
+    *{box-sizing:border-box}
+    html, body { margin:0; padding:0; background:var(--page); color:var(--ink);
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+    body { display:flex; align-items:flex-start; justify-content:center; min-height:100vh; padding:24px; }
+    .layout { display:flex; gap:16px; align-items:flex-start; }
+    #app { line-height:0; border-radius:8px; overflow:hidden; }
+    #sidebar { width:220px; display:flex; flex-direction:column; gap:16px; }
+    .panel { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:14px; }
+    .panel h2 { margin:0 0 10px; font-size:13px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-2); }
+    .stat { display:flex; justify-content:space-between; padding:4px 0; font-variant-numeric:tabular-nums; }
+    .stat .label { color:var(--ink-2); }
+    .stat .val { font-weight:650; }
+    #recipes { display:flex; flex-direction:column; gap:8px; }
+    .recipe { display:block; width:100%; text-align:left; background:var(--page); color:var(--ink);
+      border:1px solid var(--border); border-radius:8px; padding:8px 10px; cursor:pointer; font-family:inherit; }
+    .recipe:hover:not(:disabled) { border-color:var(--accent); }
+    .recipe:disabled { opacity:.45; cursor:default; }
+    .recipe.done { border-color:var(--good); opacity:.75; }
+    .rname { font-weight:650; font-size:13px; }
+    .rdesc { font-size:11px; color:var(--ink-2); margin-top:2px; }
+    .rcost { font-size:11px; color:var(--accent); margin-top:4px; }
   </style>
 </head>
 <body>
-  <div id="app"></div>
+  <div class="layout">
+    <div id="app"></div>
+    <div id="sidebar">
+      <div class="panel">
+        <h2>Inventory</h2>
+        <div id="inventory"></div>
+      </div>
+      <div class="panel">
+        <h2>Craft</h2>
+        <div id="recipes"></div>
+      </div>
+    </div>
+  </div>
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>

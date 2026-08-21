@@ -1,15 +1,16 @@
 import Phaser from 'phaser';
-import GameScene, { WIDTH, HEIGHT } from './scenes/GameScene.js';
+import GatherScene, { WIDTH, HEIGHT } from './scenes/GatherScene.js';
+import './ui.js';
 
 new Phaser.Game({
   type: Phaser.AUTO,
   parent: 'app',
   width: WIDTH,
   height: HEIGHT,
-  backgroundColor: '#111111',
+  backgroundColor: '#151a12',
   physics: {
     default: 'arcade',
     arcade: { debug: false },
   },
-  scene: [GameScene],
+  scene: [GatherScene],
 });

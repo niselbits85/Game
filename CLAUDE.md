@@ -13,18 +13,29 @@ There is no lint or test tooling configured.
 
 ## Architecture
 
-A top-down arcade shooter built with [Phaser](https://phaser.io) 4 (Arcade Physics) and Vite.
+A resource-gathering game (walk around, click nodes to collect, craft tools) built with
+[Phaser](https://phaser.io) 4 (Arcade Physics, canvas game world) plus a plain DOM sidebar for
+inventory/crafting UI, wired together with Vite.
 
-- `src/main.js` — creates the `Phaser.Game` instance and registers the scene list.
-- `src/scenes/GameScene.js` — the entire game: player movement/rotation, shooting, enemy spawning/AI,
-  collisions, HUD, and game-over/restart. Currently a single scene; split into multiple scenes (e.g. a
-  boot/preload scene, a menu scene) only once there's an actual need for scene transitions.
-- All visuals are generated at runtime via `Phaser.GameObjects.Graphics.generateTexture` (player
-  triangle, enemy/bullet circles) rather than loaded image assets — there is no `assets/` folder. If real
-  sprite art is added later, load it in a `preload()` and swap the texture keys.
+- `src/main.js` — creates the `Phaser.Game` instance, registers the scene, and imports `ui.js` to wire
+  up the sidebar.
+- `src/scenes/GatherScene.js` — the game world: player movement, resource node placement/respawn, and
+  the gather interaction (click a node while in range). `RESOURCE_DEFS` at the top controls node
+  color/size/respawn time/count per resource type — add a new resource type there and it's spawned
+  automatically.
+- `src/state.js` — the single source of truth for inventory counts, crafted tools, and recipes
+  (`RECIPES`). Framework-agnostic on purpose: both the Phaser scene (`addResource`, `yieldMultiplier`)
+  and the DOM UI (`craft`, `canCraft`) read/write through it rather than each other, and `onChange`
+  lets the DOM UI re-render whenever it changes.
+- `src/ui.js` — renders the inventory and crafting panels into the `#inventory`/`#recipes` elements
+  defined in `index.html`, and handles craft button clicks. Plain DOM, not Phaser — the game canvas and
+  the sidebar are two independent renderers kept in sync only through `state.js`.
+- All node/player visuals are generated at runtime via `Phaser.GameObjects.Graphics.generateTexture`
+  (colored circles) — there is no `assets/` folder. Swap in real sprite art via `preload()` if added
+  later.
 
-Gameplay constants (speeds, cooldowns, damage, spawn interval) are defined at the top of `GameScene.js` —
-tune them there rather than hardcoding magic numbers elsewhere.
+To add a new craftable tool: add an entry to `RECIPES` in `state.js` with a `boosts` field naming the
+resource type it doubles — `yieldMultiplier()` and the UI panel pick it up automatically.
 
 ## Notes for future instances
 

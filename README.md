@@ -1,10 +1,11 @@
 # Game
 
-A top-down arcade shooter, built with [Phaser](https://phaser.io) and Vite.
+A simple browser resource-gathering game. Walk around, click nearby trees/rocks/bushes to collect
+wood/stone/fiber, and craft tools that double how much you gather of their resource.
 
-Move with WASD or arrow keys. Shoot with Space (fires the direction you're facing) or by clicking
-(fires toward the cursor). Enemies spawn from the edges of the screen and home in on you — survive
-and rack up score.
+Move with WASD or arrow keys. Click a resource node while you're within range (the faint ring around
+your character) to gather from it — it depletes and respawns a few seconds later. Use the Craft panel
+to spend resources on an Axe, Pickaxe, or Basket, each doubling the yield of one resource type.
 
 ## Development
 
