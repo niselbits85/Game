@@ -3,15 +3,17 @@ import { addResource, yieldMultiplier } from './state.js';
 
 const WIDTH = 800;
 const HEIGHT = 600;
-const WORLD_HALF_X = 18;
-const WORLD_HALF_Z = 13;
+const WORLD_HALF_X = 40;
+const WORLD_HALF_Z = 30;
 const PLAYER_SPEED = 9;
 const INTERACT_RADIUS = 4.2;
+const CAMERA_OFFSET = new THREE.Vector3(0, 22, 15);
+const SUN_OFFSET = new THREE.Vector3(8, 16, 6);
 
 const RESOURCE_DEFS = {
-  wood: { color: 0x3f8f4f, respawnMs: 5000, counts: 8, label: 'Tree' },
-  stone: { color: 0x9a9a9a, respawnMs: 7000, counts: 6, label: 'Rock' },
-  fiber: { color: 0x9fe08f, respawnMs: 3500, counts: 8, label: 'Bush' },
+  wood: { color: 0x3f8f4f, respawnMs: 5000, counts: 36, label: 'Tree' },
+  stone: { color: 0x9a9a9a, respawnMs: 7000, counts: 26, label: 'Rock' },
+  fiber: { color: 0x9fe08f, respawnMs: 3500, counts: 36, label: 'Bush' },
 };
 
 function buildTree(color) {
@@ -62,22 +64,25 @@ export function initGame(container) {
   container.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x151a12);
+  const bg = 0x151a12;
+  scene.background = new THREE.Color(bg);
+  scene.fog = new THREE.Fog(bg, 32, 78);
 
   const camera = new THREE.PerspectiveCamera(45, WIDTH / HEIGHT, 0.1, 100);
-  camera.position.set(0, 22, 15);
+  camera.position.copy(CAMERA_OFFSET);
   camera.lookAt(0, 0, 0);
   scene.userData.camera = camera;
 
   scene.add(new THREE.AmbientLight(0xffffff, 0.6));
   const sun = new THREE.DirectionalLight(0xffffff, 1.1);
-  sun.position.set(8, 16, 6);
+  sun.position.copy(SUN_OFFSET);
   sun.castShadow = true;
-  sun.shadow.camera.left = -WORLD_HALF_X;
-  sun.shadow.camera.right = WORLD_HALF_X;
-  sun.shadow.camera.top = WORLD_HALF_Z;
-  sun.shadow.camera.bottom = -WORLD_HALF_Z;
+  sun.shadow.camera.left = -22;
+  sun.shadow.camera.right = 22;
+  sun.shadow.camera.top = 22;
+  sun.shadow.camera.bottom = -22;
   scene.add(sun);
+  scene.add(sun.target);
 
   const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(WORLD_HALF_X * 2, WORLD_HALF_Z * 2),
@@ -86,7 +91,7 @@ export function initGame(container) {
   ground.rotation.x = -Math.PI / 2;
   ground.receiveShadow = true;
   scene.add(ground);
-  scene.add(new THREE.GridHelper(WORLD_HALF_X * 2, 18, 0x2f4a29, 0x2f4a29));
+  scene.add(new THREE.GridHelper(WORLD_HALF_X * 2, WORLD_HALF_X, 0x2f4a29, 0x2f4a29));
 
   const player = new THREE.Mesh(
     new THREE.CapsuleGeometry(0.35, 0.6, 4, 8),
@@ -144,6 +149,20 @@ export function initGame(container) {
     }
     rangeRing.position.x = player.position.x;
     rangeRing.position.z = player.position.z;
+
+    camera.position.set(
+      player.position.x + CAMERA_OFFSET.x,
+      player.position.y + CAMERA_OFFSET.y,
+      player.position.z + CAMERA_OFFSET.z,
+    );
+    camera.lookAt(player.position);
+
+    sun.position.set(
+      player.position.x + SUN_OFFSET.x,
+      player.position.y + SUN_OFFSET.y,
+      player.position.z + SUN_OFFSET.z,
+    );
+    sun.target.position.copy(player.position);
 
     renderer.render(scene, camera);
   }
@@ -213,17 +232,20 @@ function floatText(node, scene, msg, color) {
   el.style.cssText = `position:absolute;font:12px monospace;color:${color};pointer-events:none;transition:transform .7s ease-out, opacity .7s ease-out;transform:translate(-50%,-50%);z-index:2;`;
   container.appendChild(el);
 
+  const start = performance.now();
+  const duration = 750;
   const update = () => {
     const projected = worldToScreen(node.mesh.position, scene.userData.camera, canvas);
     el.style.left = `${projected.x}px`;
     el.style.top = `${projected.y}px`;
+    if (performance.now() - start < duration) requestAnimationFrame(update);
   };
   update();
   requestAnimationFrame(() => {
     el.style.opacity = '0';
     el.style.transform = 'translate(-50%, -140%)';
   });
-  setTimeout(() => el.remove(), 750);
+  setTimeout(() => el.remove(), duration);
 }
 
 function worldToScreen(position, camera, canvas) {

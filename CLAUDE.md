@@ -14,9 +14,12 @@ There is no lint or test tooling configured.
 ## Architecture
 
 A 3D, top-down resource-gathering game (walk around, click nodes to collect, craft tools) built with
-[three.js](https://threejs.org) (a fixed angled `PerspectiveCamera` looking down at the scene, WASD moves
-the player in screen-relative X/Z) plus a plain DOM sidebar for inventory/crafting UI, wired together
-with Vite.
+[three.js](https://threejs.org) (an angled `PerspectiveCamera` that follows the player at a fixed offset,
+WASD moves the player in screen-relative X/Z) plus a plain DOM sidebar for inventory/crafting UI, wired
+together with Vite. The world (`WORLD_HALF_X`/`WORLD_HALF_Z`) is larger than one screen — the camera and
+directional light both track `player.position` every frame (constant `CAMERA_OFFSET`/`SUN_OFFSET`) so the
+player stays centered while exploring; the light's shadow frustum is sized to a fixed area around the
+player rather than the whole world, since it only ever needs to cover what's on screen.
 
 - `src/main.js` — calls `initGame()` to boot the three.js scene into `#app`, and imports `ui.js` to wire
   up the sidebar. No framework — just two independent entry points sharing `state.js`.
@@ -37,6 +40,10 @@ Gather interaction is proximity-based, not click-adjacent: a click raycasts agai
 *which* node was clicked, then a separate flat-distance check (`INTERACT_RADIUS`, in world X/Z) against
 the player's position decides whether the click actually lands. Keep both checks if you touch this path —
 the raycast alone doesn't enforce range.
+
+The floating "+1" pickup text (`floatText`) re-projects the node's world position to screen space on
+every frame for its short lifetime, not just once — since the camera moves every frame too, a one-shot
+projection would drift out of alignment with the node while it fades.
 
 To add a new craftable tool: add an entry to `RECIPES` in `state.js` with a `boosts` field naming the
 resource type it doubles — `yieldMultiplier()` and the UI panel pick it up automatically.
