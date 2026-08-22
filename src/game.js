@@ -248,11 +248,13 @@ export function initGame(container) {
   ghostGroup.visible = false;
   scene.add(ghostGroup);
   let ghostBuiltFor = null;
+  let placementRotation = 0; // 0-3, quarter turns
 
   const keys = new Set();
   window.addEventListener('keydown', (e) => {
     keys.add(e.code);
     if (e.code === 'Escape' && state.selectedBuilding) selectBuilding(state.selectedBuilding);
+    if (e.code === 'KeyR' && state.selectedBuilding) placementRotation = (placementRotation + 1) % 4;
   });
   window.addEventListener('keyup', (e) => keys.delete(e.code));
 
@@ -279,7 +281,7 @@ export function initGame(container) {
       const point = new THREE.Vector3();
       if (raycaster.ray.intersectPlane(groundPlane, point)) {
         const snapped = snapToGrid(point.x, point.z);
-        tryPlace(state.selectedBuilding, snapped.x, snapped.z, scene, structures, nodes, player);
+        tryPlace(state.selectedBuilding, snapped.x, snapped.z, placementRotation * (Math.PI / 2), scene, structures, nodes, player);
       }
       return;
     }
@@ -398,8 +400,10 @@ export function initGame(container) {
       ghostGroup.clear();
       ghostGroup.add(STRUCTURE_BUILDERS[buildId]());
       ghostBuiltFor = buildId;
+      placementRotation = 0;
     }
     ghostGroup.position.set(snapped.x, 0, snapped.z);
+    ghostGroup.rotation.y = placementRotation * (Math.PI / 2);
     const def = BUILDINGS.find((b) => b.id === buildId);
     const inRange = Math.hypot(snapped.x - player.position.x, snapped.z - player.position.z) <= PLACEMENT_RADIUS;
     const valid = inRange && !isBlocked(snapped.x, snapped.z, structures, nodes) && canAfford(def.cost);
@@ -501,7 +505,7 @@ function tintGhost(group, hex) {
   });
 }
 
-function tryPlace(buildId, x, z, scene, structures, nodes, player) {
+function tryPlace(buildId, x, z, rotationY, scene, structures, nodes, player) {
   const def = BUILDINGS.find((b) => b.id === buildId);
   if (!def) return;
   const marker = new THREE.Vector3(x, 1, z);
@@ -521,6 +525,7 @@ function tryPlace(buildId, x, z, scene, structures, nodes, player) {
   const mesh = STRUCTURE_BUILDERS[buildId]();
   mesh.position.x = x;
   mesh.position.z = z;
+  mesh.rotation.y = rotationY;
   scene.add(mesh);
   const structure = { id: buildId, mesh, x, z };
   if (buildId === 'chest') structure.storage = { wood: 0, stone: 0, fiber: 0 };

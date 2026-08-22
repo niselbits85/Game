@@ -57,9 +57,17 @@ existing node/structure (`isBlocked`, `PLACEMENT_MIN_DIST`), and affordable (`ca
 not clear the selection — you stay in placement mode to drop several of the same structure — Escape
 (handled in the `keydown` listener) or re-clicking the same Build button cancels it.
 
+`placementRotation` (0-3 quarter turns, a `game.js`-local variable — not in `state.js`, since nothing
+outside placement needs it) tracks the ghost's current facing; the `KeyR` handler advances it, and both
+`updateGhost` and `tryPlace` apply it as `placementRotation * (Math.PI / 2)` to the ghost/placed mesh's
+`rotation.y`. It resets to 0 only when the selected building *type* changes (same spot in `updateGhost`
+that already detects that and rebuilds the ghost mesh) — placing one structure after another with the
+same selection keeps whatever rotation you left it at, so a rotated fence line doesn't need re-rotating
+per segment.
+
 To add a new structure type: add an entry to `BUILDINGS` in `state.js` and a builder function in
-`STRUCTURE_BUILDERS` in `game.js`; placement, cost-checking, and the ghost preview all pick it up
-automatically.
+`STRUCTURE_BUILDERS` in `game.js`; placement, cost-checking, rotation, and the ghost preview all pick it
+up automatically.
 
 Right-clicking a placed structure removes it and fully refunds its cost (`tryRemove`, bound to the
 canvas's `contextmenu` event, separate from the left-click `pointerdown` handler so it can't conflict

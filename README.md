@@ -13,10 +13,11 @@ no need to recraft it.
 
 Use the Build panel to place structures — a Wall, Campfire, or Storage Chest — near yourself. Pick one,
 then click the ground: a green preview means the spot is valid, red means it's too far, blocked by
-something, or you can't afford it. Press Escape or click the selected structure again to cancel.
-Right-click a Wall or Campfire to remove it and get its resources back. Right-click a Storage Chest
-instead to open it — a popup lets you move resources between your inventory and the chest, and remove
-the chest itself (refunding both its build cost and anything still stored inside).
+something, or you can't afford it. Press R to rotate the preview 90° (handy for lining up Walls),
+Escape or click the selected structure again to cancel. Right-click a Wall or Campfire to remove it and
+get its resources back. Right-click a Storage Chest instead to open it — a popup lets you move resources
+between your inventory and the chest, and remove the chest itself (refunding both its build cost and
+anything still stored inside).
 
 The world cycles between day and night (a badge in the corner shows which). Ambient light and visibility
 dim at night — a placed Campfire lights up your base, and your held Torch (once crafted) goes with you

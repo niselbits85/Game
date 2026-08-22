@@ -49,7 +49,7 @@ function render() {
   }).join('');
 
   buildHintEl.textContent = state.selectedBuilding
-    ? 'Click the ground near you to place it. Esc to cancel.'
+    ? 'Click the ground near you to place it. R to rotate, Esc to cancel.'
     : 'Pick a structure, then click the ground to place it.';
 }
 
