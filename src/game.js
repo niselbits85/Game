@@ -249,6 +249,13 @@ export function initGame(container) {
   scene.add(ghostGroup);
   let ghostBuiltFor = null;
   let placementRotation = 0; // 0-3, quarter turns
+  let lastSelectedBuilding = state.selectedBuilding;
+  onChange(() => {
+    if (state.selectedBuilding !== lastSelectedBuilding) {
+      placementRotation = 0;
+      lastSelectedBuilding = state.selectedBuilding;
+    }
+  });
 
   const keys = new Set();
   window.addEventListener('keydown', (e) => {
@@ -280,8 +287,8 @@ export function initGame(container) {
       raycaster.setFromCamera(pointer, camera);
       const point = new THREE.Vector3();
       if (raycaster.ray.intersectPlane(groundPlane, point)) {
-        const snapped = snapToGrid(point.x, point.z);
-        tryPlace(state.selectedBuilding, snapped.x, snapped.z, placementRotation * (Math.PI / 2), scene, structures, nodes, player);
+        const pos = resolvePlacement(state.selectedBuilding, point.x, point.z, placementRotation);
+        tryPlace(state.selectedBuilding, pos.x, pos.z, placementRotation * (Math.PI / 2), scene, structures, nodes, player);
       }
       return;
     }
@@ -395,18 +402,17 @@ export function initGame(container) {
       ghostGroup.visible = false;
       return;
     }
-    const snapped = snapToGrid(point.x, point.z);
     if (ghostBuiltFor !== buildId) {
       ghostGroup.clear();
       ghostGroup.add(STRUCTURE_BUILDERS[buildId]());
       ghostBuiltFor = buildId;
-      placementRotation = 0;
     }
-    ghostGroup.position.set(snapped.x, 0, snapped.z);
+    const pos = resolvePlacement(buildId, point.x, point.z, placementRotation);
+    ghostGroup.position.set(pos.x, 0, pos.z);
     ghostGroup.rotation.y = placementRotation * (Math.PI / 2);
     const def = BUILDINGS.find((b) => b.id === buildId);
-    const inRange = Math.hypot(snapped.x - player.position.x, snapped.z - player.position.z) <= PLACEMENT_RADIUS;
-    const valid = inRange && !isBlocked(snapped.x, snapped.z, structures, nodes) && canAfford(def.cost);
+    const inRange = Math.hypot(pos.x - player.position.x, pos.z - player.position.z) <= PLACEMENT_RADIUS;
+    const valid = inRange && !isBlocked(pos.x, pos.z, structures, nodes) && canAfford(def.cost);
     tintGhost(ghostGroup, valid ? 0x7fd97f : 0xe86a6a);
     ghostGroup.visible = true;
   }
@@ -481,18 +487,42 @@ function flickerLight(light, t) {
   light.intensity = Math.max(0.3, light.userData.baseIntensity + wiggle);
 }
 
-// Snaps to the CENTER of the grid cell the point falls in (not the nearest grid line
-// intersection) - GridHelper's lines sit on multiples of GRID_SIZE, so a cell spans
-// [n*GRID_SIZE, (n+1)*GRID_SIZE) and its center is at that midpoint. A structure whose
-// footprint is <= GRID_SIZE wide, centered there, has its edges land on (or inside) the
-// drawn grid lines instead of straddling a vertex - that's what makes placed structures
-// (esp. a full-width Wall) visually line up with the ground grid.
+// GridHelper's lines sit on multiples of GRID_SIZE. A structure's footprint should have
+// its edges land ON those lines, not straddle one - which needs different snapping per
+// axis depending on the structure's shape/orientation, so this returns both candidates
+// per axis and leaves picking between them to resolvePlacement:
+//  - "line": snaps to the nearest grid line itself (a coordinate that IS a line).
+//  - "cell": snaps to the center of the cell the point falls in (the midpoint between
+//    two lines) - a structure exactly GRID_SIZE wide centered there has its two edges
+//    land exactly on the pair of lines bounding that cell.
 function snapToGrid(x, z) {
-  const cellCenter = (v) => (Math.floor(v / GRID_SIZE) + 0.5) * GRID_SIZE;
+  const line = (v) => Math.round(v / GRID_SIZE) * GRID_SIZE;
+  const cell = (v) => (Math.floor(v / GRID_SIZE) + 0.5) * GRID_SIZE;
   return {
-    x: THREE.MathUtils.clamp(cellCenter(x), -WORLD_HALF_X + 1, WORLD_HALF_X - 1),
-    z: THREE.MathUtils.clamp(cellCenter(z), -WORLD_HALF_Z + 1, WORLD_HALF_Z - 1),
+    line: {
+      x: THREE.MathUtils.clamp(line(x), -WORLD_HALF_X, WORLD_HALF_X),
+      z: THREE.MathUtils.clamp(line(z), -WORLD_HALF_Z, WORLD_HALF_Z),
+    },
+    cell: {
+      x: THREE.MathUtils.clamp(cell(x), -WORLD_HALF_X + 1, WORLD_HALF_X - 1),
+      z: THREE.MathUtils.clamp(cell(z), -WORLD_HALF_Z + 1, WORLD_HALF_Z - 1),
+    },
   };
+}
+
+// A Wall is GRID_SIZE wide (spans a full cell edge to edge) but thin the other way, so
+// its long axis should center within a cell (making its end edges land on the two lines
+// bounding that cell) while its thin axis should sit ON the line it's meant to run along
+// - which axis is "long" flips with rotationSteps. Everything else (roughly as wide as
+// it is deep) just centers in its cell on both axes.
+function resolvePlacement(buildId, x, z, rotationSteps) {
+  const snap = snapToGrid(x, z);
+  if (buildId === 'wall') {
+    return (rotationSteps % 2 === 0)
+      ? { x: snap.cell.x, z: snap.line.z }
+      : { x: snap.line.x, z: snap.cell.z };
+  }
+  return { x: snap.cell.x, z: snap.cell.z };
 }
 
 function isBlocked(x, z, structures, nodes) {

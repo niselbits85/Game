@@ -51,23 +51,36 @@ player rather than the whole world, since it only ever needs to cover what's on 
 Selecting a structure in the Build panel sets `state.selectedBuilding`; `game.js` reads that flag to
 switch its click handler from gather-mode to placement-mode (see the `pointerdown` listener in
 `initGame`) and to drive a live ghost preview (`updateGhost`, the `placementGhost` group) that follows
-the mouse, snapped to `GRID_SIZE` via `snapToGrid`, tinted green/red by `tintGhost` depending on whether
-`tryPlace`'s three checks would pass: in range of the player (`PLACEMENT_RADIUS`), not overlapping an
-existing node/structure (`isBlocked`, `PLACEMENT_MIN_DIST`), and affordable (`canAfford`). Placing does
-not clear the selection — you stay in placement mode to drop several of the same structure — Escape
-(handled in the `keydown` listener) or re-clicking the same Build button cancels it.
+the mouse, tinted green/red by `tintGhost` depending on whether `tryPlace`'s three checks would pass: in
+range of the player (`PLACEMENT_RADIUS`), not overlapping an existing node/structure (`isBlocked`,
+`PLACEMENT_MIN_DIST`), and affordable (`canAfford`). Placing does not clear the selection — you stay in
+placement mode to drop several of the same structure — Escape (handled in the `keydown` listener) or
+re-clicking the same Build button cancels it.
+
+`snapToGrid`/`resolvePlacement` decide *where* a structure lands, separately from rotation. GridHelper's
+lines sit on multiples of `GRID_SIZE`; `snapToGrid` returns both a "line" candidate (nearest grid line)
+and a "cell" candidate (center of the cell the point falls in) per axis, and `resolvePlacement` picks
+between them per structure. Most structures just use "cell" on both axes (centers them inside a cell).
+The Wall is `GRID_SIZE` wide but thin the other way, so it needs "cell" on its long axis (so its two end
+edges land exactly on the pair of lines bounding that cell) and "line" on its thin axis (so it sits ON
+the line it's meant to run along) — which axis is which flips with `placementRotation`'s parity. Get this
+wrong and a structure looks like it's floating between grid lines instead of following them.
 
 `placementRotation` (0-3 quarter turns, a `game.js`-local variable — not in `state.js`, since nothing
 outside placement needs it) tracks the ghost's current facing; the `KeyR` handler advances it, and both
-`updateGhost` and `tryPlace` apply it as `placementRotation * (Math.PI / 2)` to the ghost/placed mesh's
-`rotation.y`. It resets to 0 only when the selected building *type* changes (same spot in `updateGhost`
-that already detects that and rebuilds the ghost mesh) — placing one structure after another with the
-same selection keeps whatever rotation you left it at, so a rotated fence line doesn't need re-rotating
-per segment.
+`updateGhost` (via `resolvePlacement`) and `tryPlace` apply it as `placementRotation * (Math.PI / 2)` to
+the ghost/placed mesh's `rotation.y`. It's reset to 0 by an `onChange` subscription that fires the moment
+`state.selectedBuilding` actually changes value — reset that lazily instead (e.g. only inside
+`updateGhost`'s ghost-rebuild branch, which only runs on the next animate-loop tick) and a fast Select →
+R can have its rotation silently wiped by the deferred reset arriving a frame late. Placing one structure
+after another with the same selection keeps whatever rotation you left it at, so a rotated fence line
+doesn't need re-rotating per segment.
 
 To add a new structure type: add an entry to `BUILDINGS` in `state.js` and a builder function in
 `STRUCTURE_BUILDERS` in `game.js`; placement, cost-checking, rotation, and the ghost preview all pick it
-up automatically.
+up automatically. If its footprint is `GRID_SIZE`-wide-and-thin like the Wall, add it to the `buildId ===
+'wall'` check in `resolvePlacement` too (or generalize that check) so it gets line/cell axis-splitting
+instead of the default center-on-both-axes.
 
 Right-clicking a placed structure removes it and fully refunds its cost (`tryRemove`, bound to the
 canvas's `contextmenu` event, separate from the left-click `pointerdown` handler so it can't conflict
