@@ -24,11 +24,11 @@ player rather than the whole world, since it only ever needs to cover what's on 
 - `src/main.js` — calls `initGame()` to boot the three.js scene into `#app`, and imports `ui.js` to wire
   up the sidebar. No framework — just two independent entry points sharing `state.js`.
 - `src/game.js` — the entire game world: scene/camera/lighting setup, procedural node/player/structure
-  meshes (`buildTree`/`buildRock`/`buildBush`, `buildWall`/`buildCampfire`/`buildChest`, a
-  `CapsuleGeometry` player — no `assets/` folder, no loaded models), keyboard movement, raycaster-based
-  click-to-gather, node respawn, structure placement, and the screen-projected floating pickup/feedback
-  text. `RESOURCE_DEFS` at the top controls color/respawn time/count per resource type — add a new type
-  there and give it a builder in `BUILDERS`.
+  meshes (`buildTree`/`buildRock`/`buildBush`/`buildPlayer`, `buildWall`/`buildCampfire`/`buildChest` — no
+  `assets/` folder, no loaded models), keyboard movement, raycaster-based click-to-gather, node respawn,
+  structure placement, and the screen-projected floating pickup/feedback text. `RESOURCE_DEFS` at the top
+  controls color/respawn time/count per resource type — add a new type there and give it a builder in
+  `BUILDERS`.
 - `src/state.js` — the single source of truth for inventory counts, crafted tools, recipes (`RECIPES`),
   placeable structures (`BUILDINGS`), and which one is currently selected for placement
   (`state.selectedBuilding`). Framework-agnostic on purpose: `game.js` (`addResource`, `yieldMultiplier`,
@@ -90,6 +90,16 @@ projection would drift out of alignment with the node while it fades.
 
 To add a new craftable tool: add an entry to `RECIPES` in `state.js` with a `boosts` field naming the
 resource type it doubles — `yieldMultiplier()` and the UI panel pick it up automatically.
+
+### Visual style
+
+The player and resource nodes (not structures, which still use `MeshStandardMaterial`) are built from
+`BoxGeometry` blocks — e.g. `buildTree`'s two stacked foliage cubes, `buildPlayer`'s body+head — and
+shaded with `MeshToonMaterial` against a shared `TOON_GRADIENT`, a 4-step `DataTexture` with
+`NearestFilter` so lighting renders as flat retro color bands instead of a smooth PBR gradient. That's
+the whole 8-bit look: blocky geometry + banded toon shading, no textures or sprites. Reuse `toonMat(color)`
+and boxy geometry for anything new that should match; going back to `MeshStandardMaterial`/rounded
+geometry (as structures still do) will look inconsistent next to it.
 
 ### Day/night cycle
 

@@ -34,43 +34,65 @@ const RESOURCE_DEFS = {
   fiber: { color: 0x9fe08f, respawnMs: 3500, counts: 36, label: 'Bush' },
 };
 
+// A tiny 4-step gradient (nearest-filtered, so no blending between steps) turns
+// MeshToonMaterial's lighting into flat retro color bands instead of smooth PBR
+// shading - combined with blocky BoxGeometry everywhere, this is what gives the
+// player/resources their 8-bit look.
+function makeToonGradient() {
+  const levels = new Uint8Array([70, 130, 195, 255]);
+  const texture = new THREE.DataTexture(levels, levels.length, 1, THREE.RedFormat);
+  texture.needsUpdate = true;
+  texture.magFilter = THREE.NearestFilter;
+  texture.minFilter = THREE.NearestFilter;
+  return texture;
+}
+const TOON_GRADIENT = makeToonGradient();
+const toonMat = (color) => new THREE.MeshToonMaterial({ color, gradientMap: TOON_GRADIENT });
+
 function buildTree(color) {
   const group = new THREE.Group();
-  const trunk = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.15, 0.2, 0.6, 6),
-    new THREE.MeshStandardMaterial({ color: 0x6b4a2f }),
-  );
+  const trunk = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.6, 0.26), toonMat(0x6b4a2f));
   trunk.position.y = 0.3;
   trunk.castShadow = true;
-  const foliage = new THREE.Mesh(
-    new THREE.ConeGeometry(0.6, 1.2, 8),
-    new THREE.MeshStandardMaterial({ color }),
-  );
-  foliage.position.y = 1.2;
-  foliage.castShadow = true;
-  group.add(trunk, foliage);
+  const foliageLow = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.7, 1.0), toonMat(color));
+  foliageLow.position.y = 0.95;
+  foliageLow.castShadow = true;
+  const foliageHigh = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.6, 0.62), toonMat(color));
+  foliageHigh.position.y = 1.55;
+  foliageHigh.castShadow = true;
+  group.add(trunk, foliageLow, foliageHigh);
   return group;
 }
 
 function buildRock(color) {
-  const mesh = new THREE.Mesh(
-    new THREE.IcosahedronGeometry(0.5, 0),
-    new THREE.MeshStandardMaterial({ color, flatShading: true }),
-  );
-  mesh.position.y = 0.35;
-  mesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, 0);
+  const sx = THREE.MathUtils.randFloat(0.7, 1.15);
+  const sy = THREE.MathUtils.randFloat(0.6, 0.95);
+  const sz = THREE.MathUtils.randFloat(0.7, 1.15);
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.6 * sx, 0.5 * sy, 0.6 * sz), toonMat(color));
+  mesh.position.y = 0.25 * sy;
+  mesh.rotation.y = Math.random() * Math.PI * 2;
   mesh.castShadow = true;
   return mesh;
 }
 
 function buildBush(color) {
-  const mesh = new THREE.Mesh(
-    new THREE.SphereGeometry(0.4, 10, 8),
-    new THREE.MeshStandardMaterial({ color }),
-  );
-  mesh.position.y = 0.4;
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.5, 0.55), toonMat(color));
+  mesh.position.y = 0.25;
+  mesh.rotation.y = Math.random() * Math.PI * 2;
   mesh.castShadow = true;
   return mesh;
+}
+
+function buildPlayer(color) {
+  const group = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.6, 0.32), toonMat(color));
+  body.position.y = 0.35;
+  body.castShadow = true;
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.36, 0.36), toonMat(color));
+  head.position.y = 0.83;
+  head.castShadow = true;
+  group.add(body, head);
+  return group;
 }
 
 const BUILDERS = { wood: buildTree, stone: buildRock, fiber: buildBush };
@@ -169,12 +191,7 @@ export function initGame(container) {
   let isDay = true;
   let dayFactor = 1;
 
-  const player = new THREE.Mesh(
-    new THREE.CapsuleGeometry(0.35, 0.6, 4, 8),
-    new THREE.MeshStandardMaterial({ color: 0x4fd1ff }),
-  );
-  player.position.set(0, 0.65, 0);
-  player.castShadow = true;
+  const player = buildPlayer(0x4fd1ff);
   scene.add(player);
 
   const ringGeo = new THREE.RingGeometry(INTERACT_RADIUS - 0.05, INTERACT_RADIUS, 48);
