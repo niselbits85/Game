@@ -99,7 +99,7 @@ const BUILDERS = { wood: buildTree, stone: buildRock, fiber: buildBush };
 
 function buildWall() {
   const mesh = new THREE.Mesh(
-    new THREE.BoxGeometry(1.8, 1.0, 0.25),
+    new THREE.BoxGeometry(GRID_SIZE, 1.0, 0.25),
     new THREE.MeshStandardMaterial({ color: 0x8a6a45 }),
   );
   mesh.position.y = 0.5;
@@ -481,10 +481,17 @@ function flickerLight(light, t) {
   light.intensity = Math.max(0.3, light.userData.baseIntensity + wiggle);
 }
 
+// Snaps to the CENTER of the grid cell the point falls in (not the nearest grid line
+// intersection) - GridHelper's lines sit on multiples of GRID_SIZE, so a cell spans
+// [n*GRID_SIZE, (n+1)*GRID_SIZE) and its center is at that midpoint. A structure whose
+// footprint is <= GRID_SIZE wide, centered there, has its edges land on (or inside) the
+// drawn grid lines instead of straddling a vertex - that's what makes placed structures
+// (esp. a full-width Wall) visually line up with the ground grid.
 function snapToGrid(x, z) {
+  const cellCenter = (v) => (Math.floor(v / GRID_SIZE) + 0.5) * GRID_SIZE;
   return {
-    x: THREE.MathUtils.clamp(Math.round(x / GRID_SIZE) * GRID_SIZE, -WORLD_HALF_X + 1, WORLD_HALF_X - 1),
-    z: THREE.MathUtils.clamp(Math.round(z / GRID_SIZE) * GRID_SIZE, -WORLD_HALF_Z + 1, WORLD_HALF_Z - 1),
+    x: THREE.MathUtils.clamp(cellCenter(x), -WORLD_HALF_X + 1, WORLD_HALF_X - 1),
+    z: THREE.MathUtils.clamp(cellCenter(z), -WORLD_HALF_Z + 1, WORLD_HALF_Z - 1),
   };
 }
 
