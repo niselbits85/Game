@@ -24,11 +24,11 @@ player rather than the whole world, since it only ever needs to cover what's on 
 - `src/main.js` — calls `initGame()` to boot the three.js scene into `#app`, and imports `ui.js` to wire
   up the sidebar. No framework — just two independent entry points sharing `state.js`.
 - `src/game.js` — the entire game world: scene/camera/lighting setup, procedural node/player/structure
-  meshes (`buildTree`/`buildRock`/`buildBush`/`buildPlayer`, `buildWall`/`buildCampfire`/`buildChest` — no
-  `assets/` folder, no loaded models), keyboard movement, raycaster-based click-to-gather, node respawn,
-  structure placement, and the screen-projected floating pickup/feedback text. `RESOURCE_DEFS` at the top
-  controls color/respawn time/count per resource type — add a new type there and give it a builder in
-  `BUILDERS`.
+  meshes (`buildTree`/`buildRock`/`buildBush`/`buildPlayer`, `buildWall`/`buildCampfire`/`buildChest`/
+  `buildDoor` — no `assets/` folder, no loaded models), keyboard movement, raycaster-based click-to-gather,
+  node respawn, structure placement, and the screen-projected floating pickup/feedback text.
+  `RESOURCE_DEFS` at the top controls color/respawn time/count per resource type — add a new type there
+  and give it a builder in `BUILDERS`.
 - `src/state.js` — the single source of truth for inventory counts, crafted tools, recipes (`RECIPES`),
   placeable structures (`BUILDINGS`), and which one is currently selected for placement
   (`state.selectedBuilding`). `game.js` (`addResource`, `yieldMultiplier`, `canAfford`, `spendResources`)
@@ -86,12 +86,12 @@ up automatically.
 **Grid snapping.** GridHelper's lines sit on multiples of `GRID_SIZE`. `snapToGrid` returns, per axis,
 both a "line" candidate (nearest grid line) and a "cell" candidate (center of the cell the point falls
 in); `resolvePlacement(buildId, x, z, rotationSteps)` picks between them. Most structures use "cell" on
-both axes, centering them inside a cell. The Wall is `GRID_SIZE` wide but thin the other way, so it needs
-"cell" on its long axis (its end edges then land exactly on the pair of lines bounding that cell) and
-"line" on its thin axis (so it sits ON the line it runs along) — which axis is which flips with rotation
-parity. Get this backwards and a structure floats between grid lines instead of following them. Adding
-another `GRID_SIZE`-wide-and-thin structure means adding it to (or generalizing) the `buildId === 'wall'`
-check in `resolvePlacement`.
+both axes, centering them inside a cell. Anything in `LINE_ALIGNED_BUILDINGS` (currently Wall and Door) is
+`GRID_SIZE` wide but thin the other way, so it needs "cell" on its long axis (its end edges then land
+exactly on the pair of lines bounding that cell) and "line" on its thin axis (so it sits ON the line it
+runs along) — which axis is which flips with rotation parity. Get this backwards and a structure floats
+between grid lines instead of following them. A new `GRID_SIZE`-wide-and-thin structure just needs adding
+to that Set.
 
 **Rotation.** `placementRotation` (0–3 quarter turns, a `game.js`-local variable — not in `state.js`,
 since nothing outside placement needs it) tracks the ghost's facing; `KeyR` advances it, and both
@@ -100,6 +100,19 @@ since nothing outside placement needs it) tracks the ghost's facing; `KeyR` adva
 lazily instead (e.g. only inside `updateGhost`'s next animate-loop tick) let a fast Select → R have the R
 silently wiped by the deferred reset arriving a frame late. Placing several of the same structure in a
 row keeps whatever rotation you left it at, so a fence line doesn't need re-rotating per segment.
+
+**Interactive structures (the Door).** Outside placement mode, left-click used to only raycast against
+node meshes (for gathering); it now also raycasts door structures' meshes, and the closer hit decides
+whether the click gathers or calls `tryToggleDoor` (same `INTERACT_RADIUS` proximity gate as gathering).
+`buildDoor` is a frame (two static posts) plus a `pivot` Group positioned at one post — the leaf mesh is
+offset from the pivot rather than centered on it, so rotating the pivot swings the leaf like a real hinge
+instead of spinning it in place. The pivot is stashed at `mesh.userData.doorPivot` (same "tag the object,
+look it up later" pattern as `mesh.userData.node`/`mesh.userData.structure`) so `tryToggleDoor` and the
+animate loop can find it without a second lookup table. Toggling only flips `structure.doorOpen` and
+leaves the actual swing to a per-frame `THREE.MathUtils.lerp` toward 0 or `Math.PI / 2` (in the same
+`structures.forEach` as the light-flicker update) — that's what gives it a smooth swing instead of an
+instant snap. Right-click still demolishes a Door for a refund exactly like a Wall; only Storage Chests
+divert right-click to a popup.
 
 ### Removing structures
 

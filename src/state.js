@@ -9,6 +9,7 @@ export const BUILDINGS = [
   { id: 'wall', name: 'Wall', cost: { wood: 3 }, desc: 'A simple fence segment' },
   { id: 'campfire', name: 'Campfire', cost: { wood: 4, stone: 2 }, desc: 'A cozy fire for your base' },
   { id: 'chest', name: 'Storage Chest', cost: { wood: 5, fiber: 2 }, desc: 'Right-click to store resources' },
+  { id: 'door', name: 'Door', cost: { wood: 4 }, desc: 'Click to open or close it' },
 ];
 
 export const state = {

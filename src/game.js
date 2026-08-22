@@ -149,7 +149,41 @@ function buildChest() {
   return group;
 }
 
-const STRUCTURE_BUILDERS = { wall: buildWall, campfire: buildCampfire, chest: buildChest };
+// A GRID_SIZE-wide frame with a leaf that swings on a hinge (a pivot Group positioned at
+// the left post, containing the leaf offset to the right) rather than rotating in place -
+// see the doorOpen lerp in animate(). The pivot is stashed on userData so that code (and
+// the ghost preview, which shares this builder) can find it without a second lookup table.
+function buildDoor() {
+  const group = new THREE.Group();
+  const postMat = new THREE.MeshStandardMaterial({ color: 0x6b4a2f });
+  const postGeo = new THREE.BoxGeometry(0.2, 1.0, 0.25);
+  const postL = new THREE.Mesh(postGeo, postMat);
+  postL.position.set(-GRID_SIZE / 2 + 0.1, 0.5, 0);
+  postL.castShadow = true;
+  const postR = new THREE.Mesh(postGeo, postMat);
+  postR.position.set(GRID_SIZE / 2 - 0.1, 0.5, 0);
+  postR.castShadow = true;
+
+  const leafWidth = GRID_SIZE - 0.2;
+  const pivot = new THREE.Group();
+  pivot.position.set(-GRID_SIZE / 2 + 0.1, 0, 0);
+  const leaf = new THREE.Mesh(
+    new THREE.BoxGeometry(leafWidth, 0.9, 0.12),
+    new THREE.MeshStandardMaterial({ color: 0xa9825a }),
+  );
+  leaf.position.set(leafWidth / 2, 0.5, 0);
+  leaf.castShadow = true;
+  pivot.add(leaf);
+
+  group.add(postL, postR, pivot);
+  group.userData.doorPivot = pivot;
+  return group;
+}
+
+const STRUCTURE_BUILDERS = {
+  wall: buildWall, campfire: buildCampfire, chest: buildChest, door: buildDoor,
+};
+const LINE_ALIGNED_BUILDINGS = new Set(['wall', 'door']);
 
 // Attached directly to the player group (not placed in the world) whenever the Torch is
 // equipped - see syncHeldTorch() in initGame. Boxy + toon-shaded to match buildPlayer.
@@ -294,12 +328,16 @@ export function initGame(container) {
     }
 
     raycaster.setFromCamera(pointer, camera);
-    const hits = raycaster.intersectObjects(nodes.map((n) => n.mesh), true);
+    const doorMeshes = structures.filter((s) => s.id === 'door').map((s) => s.mesh);
+    const hits = raycaster.intersectObjects([...nodes.map((n) => n.mesh), ...doorMeshes], true);
     if (!hits.length) return;
     let obj = hits[0].object;
-    while (obj.parent && !obj.userData.node) obj = obj.parent;
-    const node = obj.userData.node;
-    if (node) tryGather(node, player, scene, nodes, structures);
+    while (obj.parent && !obj.userData.node && !obj.userData.structure) obj = obj.parent;
+    if (obj.userData.node) {
+      tryGather(obj.userData.node, player, scene, nodes, structures);
+    } else if (obj.userData.structure) {
+      tryToggleDoor(obj.userData.structure, player, scene);
+    }
   });
 
   renderer.domElement.addEventListener('contextmenu', (e) => {
@@ -381,6 +419,11 @@ export function initGame(container) {
     const t = elapsedMs / 1000;
     structures.forEach((s) => {
       s.mesh.traverse((obj) => { flickerLight(obj, t); });
+      if (s.id === 'door') {
+        const pivot = s.mesh.userData.doorPivot;
+        const target = s.doorOpen ? Math.PI / 2 : 0;
+        pivot.rotation.y = THREE.MathUtils.lerp(pivot.rotation.y, target, Math.min(1, dt * 10));
+      }
     });
     if (heldTorchLight) flickerLight(heldTorchLight, t);
 
@@ -487,6 +530,17 @@ function flickerLight(light, t) {
   light.intensity = Math.max(0.3, light.userData.baseIntensity + wiggle);
 }
 
+function tryToggleDoor(structure, player, scene) {
+  if (structure.id !== 'door') return;
+  const dist = Math.hypot(structure.x - player.position.x, structure.z - player.position.z);
+  if (dist > INTERACT_RADIUS) {
+    floatText(scene, structure.mesh.position, 'Too far', '#e86a6a');
+    return;
+  }
+  structure.doorOpen = !structure.doorOpen;
+  floatText(scene, structure.mesh.position, structure.doorOpen ? 'Door opened' : 'Door closed', '#7fd97f');
+}
+
 // GridHelper's lines sit on multiples of GRID_SIZE. A structure's footprint should have
 // its edges land ON those lines, not straddle one - which needs different snapping per
 // axis depending on the structure's shape/orientation, so this returns both candidates
@@ -517,7 +571,7 @@ function snapToGrid(x, z) {
 // it is deep) just centers in its cell on both axes.
 function resolvePlacement(buildId, x, z, rotationSteps) {
   const snap = snapToGrid(x, z);
-  if (buildId === 'wall') {
+  if (LINE_ALIGNED_BUILDINGS.has(buildId)) {
     return (rotationSteps % 2 === 0)
       ? { x: snap.cell.x, z: snap.line.z }
       : { x: snap.line.x, z: snap.cell.z };
@@ -566,6 +620,7 @@ function tryPlace(buildId, x, z, rotationY, scene, structures, nodes, player) {
   scene.add(mesh);
   const structure = { id: buildId, mesh, x, z };
   if (buildId === 'chest') structure.storage = { wood: 0, stone: 0, fiber: 0 };
+  if (buildId === 'door') structure.doorOpen = false;
   mesh.userData.structure = structure;
   structures.push(structure);
   floatText(scene, marker, `${def.name} built`, '#7fd97f');
