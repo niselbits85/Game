@@ -7,7 +7,7 @@ export const RECIPES = [
 export const BUILDINGS = [
   { id: 'wall', name: 'Wall', cost: { wood: 3 }, desc: 'A simple fence segment' },
   { id: 'campfire', name: 'Campfire', cost: { wood: 4, stone: 2 }, desc: 'A cozy fire for your base' },
-  { id: 'chest', name: 'Storage Chest', cost: { wood: 5, fiber: 2 }, desc: 'Marks a storage spot' },
+  { id: 'chest', name: 'Storage Chest', cost: { wood: 5, fiber: 2 }, desc: 'Right-click to store resources' },
 ];
 
 export const state = {
@@ -18,6 +18,7 @@ export const state = {
 
 const listeners = new Set();
 export function onChange(fn) { listeners.add(fn); }
+export function offChange(fn) { listeners.delete(fn); }
 function notify() { listeners.forEach((fn) => fn(state)); }
 
 export function addResource(type, amount) {

@@ -40,6 +40,25 @@
       transition:background-color .4s ease;
     }
     #dayNight.night { background:rgba(0,0,0,0.6); color:#c7d3ff; }
+    .chest-menu {
+      position:absolute; z-index:5; width:200px; background:var(--panel); color:var(--ink);
+      border:1px solid var(--border); border-radius:10px; padding:10px 12px; font-size:12px;
+      box-shadow:0 8px 24px rgba(0,0,0,.45);
+    }
+    .chest-head { display:flex; justify-content:space-between; align-items:center; font-weight:650; margin-bottom:8px; }
+    .chest-close { background:transparent; border:0; color:var(--ink-2); font-size:16px; line-height:1;
+      padding:0 2px; cursor:pointer; }
+    .chest-close:hover { color:var(--ink); }
+    .chest-row { display:grid; grid-template-columns:1fr auto auto auto auto; align-items:center; gap:6px; padding:4px 0; }
+    .chest-res { font-weight:600; }
+    .chest-amt { color:var(--ink-2); font-variant-numeric:tabular-nums; white-space:nowrap; }
+    .chest-row button { width:22px; height:22px; border:1px solid var(--border); background:var(--page);
+      color:var(--ink); border-radius:6px; cursor:pointer; font-family:inherit; }
+    .chest-row button:hover:not(:disabled) { border-color:var(--accent); }
+    .chest-row button:disabled { opacity:.35; cursor:default; }
+    .chest-remove { margin-top:8px; width:100%; border:1px dashed var(--border); background:transparent;
+      color:var(--ink-2); border-radius:8px; padding:6px; font-family:inherit; font-size:11px; cursor:pointer; }
+    .chest-remove:hover { color:#e86a6a; border-color:#e86a6a; }
   </style>
 </head>
 <body>
@@ -60,7 +79,7 @@
         <h2>Build</h2>
         <p class="hint" id="buildHint"></p>
         <div id="buildings"></div>
-        <p class="hint" style="margin:10px 0 0">Right-click a placed structure to remove it and get its resources back.</p>
+        <p class="hint" style="margin:10px 0 0">Right-click a Wall or Campfire to remove it, or a Chest to open its storage.</p>
       </div>
     </div>
   </div>

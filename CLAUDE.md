@@ -37,6 +37,11 @@ player rather than the whole world, since it only ever needs to cover what's on 
 - `src/ui.js` — renders the inventory, crafting, and build panels into the `#inventory`/`#recipes`/
   `#buildings` elements defined in `index.html`, and handles craft/build button clicks. Plain DOM — the
   game canvas and the sidebar are two independent renderers kept in sync only through `state.js`.
+- `src/chestMenu.js` — the popup opened by right-clicking a placed Storage Chest. Self-contained: it
+  owns its own DOM element and lifecycle (`openChestMenu`/`closeChestMenu`), subscribes to `state.js`'s
+  `onChange` for live inventory numbers, and mutates the chest's own `structure.storage` object directly
+  (that per-chest storage isn't part of `state.js` — it lives on the structure record in `game.js`, since
+  `state.js` models one global inventory, not N independent chest inventories).
 
 ### Building placement
 
@@ -59,7 +64,16 @@ with gather/placement). Every structure's mesh is tagged with `mesh.userData.str
 its `{ id, mesh, x, z }` record — same pattern as `mesh.userData.node` on resource nodes — so the
 raycast hit can walk up to find the record to remove. `tryRemove` also disposes the mesh's geometry and
 materials (`disposeMesh`), unlike node respawn/hide, since structures are actually destroyed rather than
-just toggled invisible and reused.
+just toggled invisible and reused. `tryRemove` returns `true`/`false` (whether it actually removed
+anything, e.g. `false` if the player was out of `PLACEMENT_RADIUS`) — `chestMenu.js`'s "Remove chest"
+button only closes the popup when it gets `true` back, so a failed removal leaves the menu open with its
+`Too far` feedback visible instead of silently closing.
+
+Storage Chests are the one structure type right-click doesn't demolish directly: the `contextmenu`
+handler special-cases `structure.id === 'chest'` to open `chestMenu.js`'s popup instead (any other
+structure still demolishes immediately). That popup's own "Remove chest" button is what calls
+`tryRemove`, and since it refunds `structure.storage` alongside the chest's own build cost, nothing
+stored inside is lost when a chest is torn down.
 
 Gather interaction is proximity-based, not click-adjacent: a click raycasts against node meshes to find
 *which* node was clicked, then a separate flat-distance check (`INTERACT_RADIUS`, in world X/Z) against

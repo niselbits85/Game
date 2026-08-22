@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import {
   addResource, yieldMultiplier, state, BUILDINGS, canAfford, spendResources, selectBuilding,
 } from './state.js';
+import { openChestMenu } from './chestMenu.js';
 
 const WIDTH = 800;
 const HEIGHT = 600;
@@ -249,7 +250,20 @@ export function initGame(container) {
     let obj = hits[0].object;
     while (obj.parent && !obj.userData.structure) obj = obj.parent;
     const structure = obj.userData.structure;
-    if (structure) tryRemove(structure, player, scene, structures);
+    if (!structure) return;
+
+    if (structure.id === 'chest') {
+      const dist = Math.hypot(structure.x - player.position.x, structure.z - player.position.z);
+      if (dist > PLACEMENT_RADIUS) {
+        floatText(scene, structure.mesh.position, 'Too far', '#e86a6a');
+        return;
+      }
+      openChestMenu(structure, e.clientX, e.clientY, {
+        onRemove: () => tryRemove(structure, player, scene, structures),
+      });
+    } else {
+      tryRemove(structure, player, scene, structures);
+    }
   });
 
   const timer = new THREE.Timer();
@@ -453,6 +467,7 @@ function tryPlace(buildId, x, z, scene, structures, nodes, player) {
   mesh.position.z = z;
   scene.add(mesh);
   const structure = { id: buildId, mesh, x, z };
+  if (buildId === 'chest') structure.storage = { wood: 0, stone: 0, fiber: 0 };
   mesh.userData.structure = structure;
   structures.push(structure);
   floatText(scene, marker, `${def.name} built`, '#7fd97f');
@@ -462,7 +477,7 @@ function tryRemove(structure, player, scene, structures) {
   const dist = Math.hypot(structure.x - player.position.x, structure.z - player.position.z);
   if (dist > PLACEMENT_RADIUS) {
     floatText(scene, structure.mesh.position, 'Too far', '#e86a6a');
-    return;
+    return false;
   }
   const idx = structures.indexOf(structure);
   if (idx !== -1) structures.splice(idx, 1);
@@ -471,13 +486,23 @@ function tryRemove(structure, player, scene, structures) {
 
   const def = BUILDINGS.find((b) => b.id === structure.id);
   const marker = structure.mesh.position.clone();
+  const refundParts = [];
   if (def) {
-    Object.entries(def.cost).forEach(([res, amt]) => addResource(res, amt));
-    const refund = Object.entries(def.cost).map(([res, amt]) => `+${amt} ${res}`).join(', ');
-    floatText(scene, marker, `${def.name} removed (${refund})`, '#7fd97f');
-  } else {
-    floatText(scene, marker, 'Removed', '#7fd97f');
+    Object.entries(def.cost).forEach(([res, amt]) => {
+      addResource(res, amt);
+      refundParts.push(`+${amt} ${res}`);
+    });
   }
+  if (structure.storage) {
+    Object.entries(structure.storage).forEach(([res, amt]) => {
+      if (amt <= 0) return;
+      addResource(res, amt);
+      refundParts.push(`+${amt} ${res}`);
+    });
+  }
+  const label = def ? def.name : 'Structure';
+  floatText(scene, marker, refundParts.length ? `${label} removed (${refundParts.join(', ')})` : `${label} removed`, '#7fd97f');
+  return true;
 }
 
 function disposeMesh(mesh) {
