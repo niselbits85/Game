@@ -31,12 +31,12 @@ player rather than the whole world, since it only ever needs to cover what's on 
   `BUILDERS`.
 - `src/state.js` — the single source of truth for inventory counts, crafted tools, recipes (`RECIPES`),
   placeable structures (`BUILDINGS`), and which one is currently selected for placement
-  (`state.selectedBuilding`). Framework-agnostic on purpose: `game.js` (`addResource`, `yieldMultiplier`,
-  `canAfford`, `spendResources`) and the DOM UI (`craft`, `canCraft`, `selectBuilding`) read/write through
-  it rather than each other, and `onChange` lets the DOM UI re-render whenever it changes. `RECIPES` is
-  for one-time permanent player upgrades (gather-boosting tools, the held Torch); `BUILDINGS` is for
-  structures placed and removable in the world — a "buildable" thing that should instead attach to the
-  player and stay forever belongs in `RECIPES`, not `BUILDINGS`, however it got introduced in conversation.
+  (`state.selectedBuilding`). `game.js` (`addResource`, `yieldMultiplier`, `canAfford`, `spendResources`)
+  and the DOM UI (`craft`, `canCraft`, `selectBuilding`) read/write through it rather than each other, and
+  `onChange` lets both re-render/react whenever it changes. `RECIPES` is for one-time permanent player
+  upgrades (gather-boosting tools, the held Torch); `BUILDINGS` is for structures placed and removable in
+  the world — a "buildable" thing that instead attaches to the player and stays forever belongs in
+  `RECIPES`, not `BUILDINGS`.
 - `src/ui.js` — renders the inventory, crafting, and build panels into the `#inventory`/`#recipes`/
   `#buildings` elements defined in `index.html`, and handles craft/build button clicks. Plain DOM — the
   game canvas and the sidebar are two independent renderers kept in sync only through `state.js`.
@@ -45,6 +45,28 @@ player rather than the whole world, since it only ever needs to cover what's on 
   `onChange` for live inventory numbers, and mutates the chest's own `structure.storage` object directly
   (that per-chest storage isn't part of `state.js` — it lives on the structure record in `game.js`, since
   `state.js` models one global inventory, not N independent chest inventories).
+
+### Gathering
+
+Proximity-based, not click-adjacent: a click raycasts against node meshes to find *which* node was
+clicked, then a separate flat-distance check (`INTERACT_RADIUS`, in world X/Z) against the player's
+position decides whether the click actually lands. Keep both checks if you touch this path — the raycast
+alone doesn't enforce range.
+
+A depleted node doesn't respawn in place — `tryGather`'s `setTimeout` calls `pickSpot` again (same
+`NODE_MARGIN`/`NODE_MIN_DIST` used at world-build time) to relocate it somewhere else clear of every
+other node and structure, then moves its existing mesh there rather than creating a new one.
+
+The floating "+1" pickup text (`floatText`) re-projects the node's world position to screen space on
+every frame for its short lifetime, not just once — since the camera moves every frame too, a one-shot
+projection would drift out of alignment with the node while it fades.
+
+### Crafting
+
+Add a new gather-boosting tool by adding an entry to `RECIPES` in `state.js` with a `boosts` field naming
+the resource type it doubles — `yieldMultiplier()` and the UI panel pick it up automatically. `boosts` is
+optional — a recipe without one (like `torch`) just has some other effect that `game.js` reads directly
+off `state.crafted.<id>` instead of a gather bonus (see Held items below).
 
 ### Building placement
 
@@ -57,65 +79,44 @@ range of the player (`PLACEMENT_RADIUS`), not overlapping an existing node/struc
 placement mode to drop several of the same structure — Escape (handled in the `keydown` listener) or
 re-clicking the same Build button cancels it.
 
-`snapToGrid`/`resolvePlacement` decide *where* a structure lands, separately from rotation. GridHelper's
-lines sit on multiples of `GRID_SIZE`; `snapToGrid` returns both a "line" candidate (nearest grid line)
-and a "cell" candidate (center of the cell the point falls in) per axis, and `resolvePlacement` picks
-between them per structure. Most structures just use "cell" on both axes (centers them inside a cell).
-The Wall is `GRID_SIZE` wide but thin the other way, so it needs "cell" on its long axis (so its two end
-edges land exactly on the pair of lines bounding that cell) and "line" on its thin axis (so it sits ON
-the line it's meant to run along) — which axis is which flips with `placementRotation`'s parity. Get this
-wrong and a structure looks like it's floating between grid lines instead of following them.
-
-`placementRotation` (0-3 quarter turns, a `game.js`-local variable — not in `state.js`, since nothing
-outside placement needs it) tracks the ghost's current facing; the `KeyR` handler advances it, and both
-`updateGhost` (via `resolvePlacement`) and `tryPlace` apply it as `placementRotation * (Math.PI / 2)` to
-the ghost/placed mesh's `rotation.y`. It's reset to 0 by an `onChange` subscription that fires the moment
-`state.selectedBuilding` actually changes value — reset that lazily instead (e.g. only inside
-`updateGhost`'s ghost-rebuild branch, which only runs on the next animate-loop tick) and a fast Select →
-R can have its rotation silently wiped by the deferred reset arriving a frame late. Placing one structure
-after another with the same selection keeps whatever rotation you left it at, so a rotated fence line
-doesn't need re-rotating per segment.
-
 To add a new structure type: add an entry to `BUILDINGS` in `state.js` and a builder function in
 `STRUCTURE_BUILDERS` in `game.js`; placement, cost-checking, rotation, and the ghost preview all pick it
-up automatically. If its footprint is `GRID_SIZE`-wide-and-thin like the Wall, add it to the `buildId ===
-'wall'` check in `resolvePlacement` too (or generalize that check) so it gets line/cell axis-splitting
-instead of the default center-on-both-axes.
+up automatically.
+
+**Grid snapping.** GridHelper's lines sit on multiples of `GRID_SIZE`. `snapToGrid` returns, per axis,
+both a "line" candidate (nearest grid line) and a "cell" candidate (center of the cell the point falls
+in); `resolvePlacement(buildId, x, z, rotationSteps)` picks between them. Most structures use "cell" on
+both axes, centering them inside a cell. The Wall is `GRID_SIZE` wide but thin the other way, so it needs
+"cell" on its long axis (its end edges then land exactly on the pair of lines bounding that cell) and
+"line" on its thin axis (so it sits ON the line it runs along) — which axis is which flips with rotation
+parity. Get this backwards and a structure floats between grid lines instead of following them. Adding
+another `GRID_SIZE`-wide-and-thin structure means adding it to (or generalizing) the `buildId === 'wall'`
+check in `resolvePlacement`.
+
+**Rotation.** `placementRotation` (0–3 quarter turns, a `game.js`-local variable — not in `state.js`,
+since nothing outside placement needs it) tracks the ghost's facing; `KeyR` advances it, and both
+`updateGhost` and `tryPlace` apply it as `placementRotation * (Math.PI / 2)` to `rotation.y`. It resets to
+0 via an `onChange` subscription that fires the instant `state.selectedBuilding` changes — resetting it
+lazily instead (e.g. only inside `updateGhost`'s next animate-loop tick) let a fast Select → R have the R
+silently wiped by the deferred reset arriving a frame late. Placing several of the same structure in a
+row keeps whatever rotation you left it at, so a fence line doesn't need re-rotating per segment.
+
+### Removing structures
 
 Right-clicking a placed structure removes it and fully refunds its cost (`tryRemove`, bound to the
 canvas's `contextmenu` event, separate from the left-click `pointerdown` handler so it can't conflict
 with gather/placement). Every structure's mesh is tagged with `mesh.userData.structure` pointing back at
-its `{ id, mesh, x, z }` record — same pattern as `mesh.userData.node` on resource nodes — so the
-raycast hit can walk up to find the record to remove. `tryRemove` also disposes the mesh's geometry and
-materials (`disposeMesh`), unlike node respawn/hide, since structures are actually destroyed rather than
-just toggled invisible and reused. `tryRemove` returns `true`/`false` (whether it actually removed
-anything, e.g. `false` if the player was out of `PLACEMENT_RADIUS`) — `chestMenu.js`'s "Remove chest"
-button only closes the popup when it gets `true` back, so a failed removal leaves the menu open with its
-`Too far` feedback visible instead of silently closing.
+its `{ id, mesh, x, z }` record — same pattern as `mesh.userData.node` on resource nodes — so the raycast
+hit can walk up to find the record to remove. `tryRemove` also disposes the mesh's geometry and materials
+(`disposeMesh`), unlike node respawn/hide, since structures are actually destroyed rather than toggled
+invisible and reused. It returns `true`/`false` (whether it actually removed anything, e.g. `false` if
+the player was out of `PLACEMENT_RADIUS`) — `chestMenu.js`'s "Remove chest" button only closes the popup
+on `true`, so a failed removal leaves the menu open with its `Too far` feedback visible.
 
 Storage Chests are the one structure type right-click doesn't demolish directly: the `contextmenu`
-handler special-cases `structure.id === 'chest'` to open `chestMenu.js`'s popup instead (any other
-structure still demolishes immediately). That popup's own "Remove chest" button is what calls
-`tryRemove`, and since it refunds `structure.storage` alongside the chest's own build cost, nothing
-stored inside is lost when a chest is torn down.
-
-Gather interaction is proximity-based, not click-adjacent: a click raycasts against node meshes to find
-*which* node was clicked, then a separate flat-distance check (`INTERACT_RADIUS`, in world X/Z) against
-the player's position decides whether the click actually lands. Keep both checks if you touch this path —
-the raycast alone doesn't enforce range.
-
-A depleted node doesn't respawn in place — `tryGather`'s `setTimeout` calls `pickSpot` again (same
-`NODE_MARGIN`/`NODE_MIN_DIST` used at world-build time) to relocate it somewhere else clear of every
-other node and structure, then moves its existing mesh there rather than creating a new one.
-
-The floating "+1" pickup text (`floatText`) re-projects the node's world position to screen space on
-every frame for its short lifetime, not just once — since the camera moves every frame too, a one-shot
-projection would drift out of alignment with the node while it fades.
-
-To add a new craftable gather-boosting tool: add an entry to `RECIPES` in `state.js` with a `boosts`
-field naming the resource type it doubles — `yieldMultiplier()` and the UI panel pick it up
-automatically. `boosts` is optional — a recipe without one (like `torch`) just has some other effect
-that `game.js` reads directly off `state.crafted.<id>` (see the held Torch below), not a gather bonus.
+handler special-cases `structure.id === 'chest'` to open `chestMenu.js`'s popup instead. That popup's own
+"Remove chest" button is what calls `tryRemove`, and since it refunds `structure.storage` alongside the
+chest's own build cost, nothing stored inside is lost when a chest is torn down.
 
 ### Visual style
 
@@ -131,47 +132,43 @@ geometry (as structures still do) will look inconsistent next to it.
 
 A full cycle is `DAY_LENGTH_MS` (90s), driven off `timer.getElapsed()` so it's tied to elapsed game time,
 not wall-clock time. Each frame computes `dayFactor` (0 = midnight, 1 = noon) from a sine wave phased so
-the game starts at full day, then lerps the "unlit" scene properties that don't respond to light on
-their own — `scene.background`/`scene.fog` color, fog near/far, and the `gridHelper` line tint — between
-paired `DAY_*`/`NIGHT_*` constants, plus the `ambient`/`sun` lights' intensity and color. Everything else
+the game starts at full day, then lerps the "unlit" scene properties that don't respond to light on their
+own — `scene.background`/`scene.fog` color, fog near/far, and the `gridHelper` line tint — between paired
+`DAY_*`/`NIGHT_*` constants, plus the `ambient`/`sun` lights' intensity and color. Everything else
 (ground, trees, rocks, player, structures) uses `MeshStandardMaterial` and darkens on its own as those
 lights dim — don't add manual tinting for new lit geometry, only for new *unlit* (`MeshBasicMaterial`/
-`LineBasicMaterial`) elements. `initGame()` returns a `getTimeOfDay()` getter exposing `{ isDay, dayFactor }`;
-`main.js` polls it every 500ms to flip the `#dayNight` badge.
+`LineBasicMaterial`) elements. `initGame()` returns a `getTimeOfDay()` getter exposing `{ isDay,
+dayFactor }`; `main.js` polls it every 500ms to flip the `#dayNight` badge.
 
 Placed campfires (and the held Torch, see below) get an organic flicker independent of the day/night
 lerp: their builders tag the `PointLight` with `userData.baseIntensity`, and `flickerLight(light, t)`
 (called each frame for every structure's light plus the held torch light) applies a two-frequency sine
-wiggle on top of that base value. A stronger point light than the original tuning was needed for the
-glow to read clearly once night darkens the ambient/sun down near their `NIGHT_*` floors — if you add
-another light-emitting mesh, tag its light with `baseIntensity` the same way and pass it through
-`flickerLight` to get the flicker for free.
+wiggle on top of that base value. A stronger point light than the original tuning was needed for the glow
+to read clearly once night darkens the ambient/sun down near their `NIGHT_*` floors — if you add another
+light-emitting mesh, tag its light with `baseIntensity` the same way and pass it through `flickerLight`.
 
 ### Held items
 
 The Torch is a `RECIPES` entry with no `boosts`, but unlike Axe/Pickaxe/Basket it isn't a permanent
-one-shot unlock — it's got two independent flags in `state.js`: `state.crafted.torch` (do you own one at
-all, set once by `craft()` and never unset, same as the other recipes) and `state.torchEquipped` (is it
-currently in-hand, toggled freely by `toggleTorch()`). Crafting auto-equips (`craft()` sets both flags
-together). `game.js`'s `syncHeldTorch()` (subscribed via `onChange`, called once at startup too) reads
-`torchEquipped` each time and adds or removes `buildHeldTorch()` from the `player` group to match —
-`disposeMesh` on removal, same as demolishing a structure, so toggling repeatedly doesn't leak GPU
-resources. Being a child of `player` rather than positioned in world space each frame means it
-automatically follows the player through three.js's normal scene-graph transform inheritance while
-equipped — no per-frame position syncing needed, unlike the campfire-style structures or the sun.
+one-shot unlock — it has two independent flags: `state.crafted.torch` (do you own one at all, set once by
+`craft()` and never unset) and `state.torchEquipped` (is it currently in-hand, toggled freely by
+`toggleTorch()`). Crafting auto-equips (`craft()` sets both flags together). `game.js`'s `syncHeldTorch()`
+(subscribed via `onChange`, called once at startup too) reads `torchEquipped` and adds or removes
+`buildHeldTorch()` from the `player` group to match — `disposeMesh` on removal, so toggling repeatedly
+doesn't leak GPU resources. Being a child of `player` rather than positioned in world space each frame
+means it automatically follows the player through three.js's normal scene-graph transform inheritance —
+no per-frame position syncing needed, unlike the campfire-style structures or the sun.
 
-In `ui.js`, once `state.crafted.torch` is true the Craft panel swaps that recipe's normal "buy" button
-for a permanently-enabled toggle (`data-toggle="torch"`, handled before the generic `data-id` craft
-handler) showing Equipped/Unequipped and calling `toggleTorch()` — toggling never spends or refunds
-resources, only the one-time `craft()` does.
+In `ui.js`, once `state.crafted.torch` is true the Craft panel swaps that recipe's normal "buy" button for
+a permanently-enabled toggle (`data-toggle="torch"`, handled before the generic `data-id` craft handler)
+showing Equipped/Unequipped and calling `toggleTorch()` — toggling never spends or refunds resources, only
+the one-time `craft()` does.
 
 ## Notes for future instances
 
 - This folder is a git repository scoped to itself — do not run `git init` in a parent directory that
   contains unrelated files (e.g. the user's home directory).
-- The sidebar (`#sidebar`) has grown past a typical short viewport's height as more Build/Craft entries
-  were added, so the page can scroll. This matters for headless browser testing specifically: clicking a
-  below-the-fold sidebar button (e.g. a newer Build entry) can auto-scroll the page, which invalidates a
-  canvas `boundingBox()` captured earlier in the script — re-measure it after such a click rather than
-  reusing a cached one, or use a locator's own relative-position click (immune to this) instead of raw
-  page coordinates.
+- The sidebar (`#sidebar`) can now be taller than a short viewport. In headless tests, clicking a
+  below-the-fold sidebar button can auto-scroll the page and invalidate an already-captured canvas
+  `boundingBox()` — re-measure it after such a click, or use a locator's relative-position click instead
+  of raw page coordinates.
