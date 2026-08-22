@@ -100,8 +100,8 @@ their own — `scene.background`/`scene.fog` color, fog near/far, and the `gridH
 paired `DAY_*`/`NIGHT_*` constants, plus the `ambient`/`sun` lights' intensity and color. Everything else
 (ground, trees, rocks, player, structures) uses `MeshStandardMaterial` and darkens on its own as those
 lights dim — don't add manual tinting for new lit geometry, only for new *unlit* (`MeshBasicMaterial`/
-`LineBasicMaterial`) elements. `initGame()` returns a `getTimeOfDay()` getter exposing `{ isDay, dayFactor }`; `main.js` polls it every
-500ms to flip the `#dayNight` badge.
+`LineBasicMaterial`) elements. `initGame()` returns a `getTimeOfDay()` getter exposing `{ isDay, dayFactor }`;
+`main.js` polls it every 500ms to flip the `#dayNight` badge.
 
 Placed campfires get an organic flicker independent of the day/night lerp: `buildCampfire` tags its
 `PointLight` with `userData.baseIntensity`, and the animate loop walks every entry in `structures` each
