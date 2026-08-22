@@ -40,7 +40,11 @@ player rather than the whole world, since it only ever needs to cover what's on 
   `RECIPES`, not `BUILDINGS`.
 - `src/ui.js` — renders the inventory, crafting, and build panels into the `#inventory`/`#recipes`/
   `#buildings` elements defined in `index.html`, and handles craft/build button clicks. Plain DOM — the
-  game canvas and the sidebar are two independent renderers kept in sync only through `state.js`.
+  game canvas and the sidebars are two independent renderers kept in sync only through `state.js`.
+  `index.html`'s layout is three columns (`.sidebar` on the left holding Inventory+Craft, `#app` centered,
+  a second `.sidebar` on the right holding Build) — `ui.js` doesn't care which physical column an element
+  ends up in, it only ever queries by the element's own id, so rearranging panels between the two
+  `.sidebar` columns is a pure `index.html` edit.
 - `src/chestMenu.js` — the popup opened by right-clicking a placed Storage Chest. Self-contained: it
   owns its own DOM element and lifecycle (`openChestMenu`/`closeChestMenu`), subscribes to `state.js`'s
   `onChange` for live inventory numbers, and mutates the chest's own `structure.storage` object directly
@@ -195,7 +199,11 @@ the one-time `craft()` does.
 
 - This folder is a git repository scoped to itself — do not run `git init` in a parent directory that
   contains unrelated files (e.g. the user's home directory).
-- The sidebar (`#sidebar`) can now be taller than a short viewport. In headless tests, clicking a
+- Either `.sidebar` column (there are two — see `src/ui.js` above) can end up taller than a short
+  viewport, especially the Build one now that it lists 8 structures. In headless tests, clicking a
   below-the-fold sidebar button can auto-scroll the page and invalidate an already-captured canvas
   `boundingBox()` — re-measure it after such a click, or use a locator's relative-position click instead
-  of raw page coordinates.
+  of raw page coordinates. `#app` also has `flex-shrink:0` specifically so the canvas never gets visually
+  squeezed narrower than its logical 800px box when the three columns don't all fit the viewport width —
+  without that, coordinates computed from the canvas's true size can silently stop matching what's
+  actually rendered.
