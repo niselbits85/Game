@@ -65,6 +65,25 @@ projection would drift out of alignment with the node while it fades.
 To add a new craftable tool: add an entry to `RECIPES` in `state.js` with a `boosts` field naming the
 resource type it doubles — `yieldMultiplier()` and the UI panel pick it up automatically.
 
+### Day/night cycle
+
+A full cycle is `DAY_LENGTH_MS` (90s), driven off `timer.getElapsed()` so it's tied to elapsed game time,
+not wall-clock time. Each frame computes `dayFactor` (0 = midnight, 1 = noon) from a sine wave phased so
+the game starts at full day, then lerps the "unlit" scene properties that don't respond to light on
+their own — `scene.background`/`scene.fog` color, fog near/far, and the `gridHelper` line tint — between
+paired `DAY_*`/`NIGHT_*` constants, plus the `ambient`/`sun` lights' intensity and color. Everything else
+(ground, trees, rocks, player, structures) uses `MeshStandardMaterial` and darkens on its own as those
+lights dim — don't add manual tinting for new lit geometry, only for new *unlit* (`MeshBasicMaterial`/
+`LineBasicMaterial`) elements. `initGame()` returns a `getTimeOfDay()` getter exposing `{ isDay, dayFactor }`; `main.js` polls it every
+500ms to flip the `#dayNight` badge.
+
+Placed campfires get an organic flicker independent of the day/night lerp: `buildCampfire` tags its
+`PointLight` with `userData.baseIntensity`, and the animate loop walks every entry in `structures` each
+frame applying a two-frequency sine wiggle on top of that base value. A stronger point light
+(intensity 1.8, range 9) than the original tuning was needed for the glow to read clearly once night
+darkens the ambient/sun down near their `NIGHT_*` floors — if you add another light-emitting structure,
+tag it with `baseIntensity` the same way to get the flicker for free.
+
 ## Notes for future instances
 
 - This folder is a git repository scoped to itself — do not run `git init` in a parent directory that

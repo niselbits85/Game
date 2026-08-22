@@ -33,11 +33,20 @@
     .rcost { font-size:11px; color:var(--accent); margin-top:4px; }
     #buildings { display:flex; flex-direction:column; gap:8px; }
     .hint { font-size:11px; color:var(--ink-2); margin:-4px 0 10px; }
+    #dayNight {
+      position:absolute; top:10px; right:10px; z-index:3; pointer-events:none;
+      background:rgba(0,0,0,0.45); border:1px solid var(--border); border-radius:20px;
+      padding:5px 12px; font-size:12px; font-weight:650; letter-spacing:.03em; color:var(--ink);
+      transition:background-color .4s ease;
+    }
+    #dayNight.night { background:rgba(0,0,0,0.6); color:#c7d3ff; }
   </style>
 </head>
 <body>
   <div class="layout">
-    <div id="app"></div>
+    <div id="app">
+      <div id="dayNight">Day</div>
+    </div>
     <div id="sidebar">
       <div class="panel">
         <h2>Inventory</h2>

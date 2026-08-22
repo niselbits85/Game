@@ -15,6 +15,16 @@ const PLACEMENT_MIN_DIST = 1.1;
 const CAMERA_OFFSET = new THREE.Vector3(0, 22, 15);
 const SUN_OFFSET = new THREE.Vector3(8, 16, 6);
 
+const DAY_LENGTH_MS = 90000;
+const DAY_BG = new THREE.Color(0x151a12);
+const NIGHT_BG = new THREE.Color(0x03040a);
+const DAY_FOG = { near: 32, far: 78 };
+const NIGHT_FOG = { near: 16, far: 46 };
+const DAY_AMBIENT = { intensity: 0.6, color: new THREE.Color(0xffffff) };
+const NIGHT_AMBIENT = { intensity: 0.12, color: new THREE.Color(0x4a5a8f) };
+const DAY_SUN = { intensity: 1.1, color: new THREE.Color(0xffffff) };
+const NIGHT_SUN = { intensity: 0.15, color: new THREE.Color(0x8fa8ff) };
+
 const RESOURCE_DEFS = {
   wood: { color: 0x3f8f4f, respawnMs: 5000, counts: 36, label: 'Tree' },
   stone: { color: 0x9a9a9a, respawnMs: 7000, counts: 26, label: 'Rock' },
@@ -89,8 +99,9 @@ function buildCampfire() {
   );
   flame.position.y = 0.35;
   group.add(flame);
-  const light = new THREE.PointLight(0xffa040, 1.2, 6, 2);
+  const light = new THREE.PointLight(0xffa040, 1.8, 9, 2);
   light.position.y = 0.5;
+  light.userData.baseIntensity = 1.8;
   group.add(light);
   return group;
 }
@@ -122,17 +133,17 @@ export function initGame(container) {
   container.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
-  const bg = 0x151a12;
-  scene.background = new THREE.Color(bg);
-  scene.fog = new THREE.Fog(bg, 32, 78);
+  scene.background = DAY_BG.clone();
+  scene.fog = new THREE.Fog(DAY_BG.getHex(), DAY_FOG.near, DAY_FOG.far);
 
   const camera = new THREE.PerspectiveCamera(45, WIDTH / HEIGHT, 0.1, 100);
   camera.position.copy(CAMERA_OFFSET);
   camera.lookAt(0, 0, 0);
   scene.userData.camera = camera;
 
-  scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-  const sun = new THREE.DirectionalLight(0xffffff, 1.1);
+  const ambient = new THREE.AmbientLight(DAY_AMBIENT.color, DAY_AMBIENT.intensity);
+  scene.add(ambient);
+  const sun = new THREE.DirectionalLight(DAY_SUN.color, DAY_SUN.intensity);
   sun.position.copy(SUN_OFFSET);
   sun.castShadow = true;
   sun.shadow.camera.left = -22;
@@ -149,7 +160,11 @@ export function initGame(container) {
   ground.rotation.x = -Math.PI / 2;
   ground.receiveShadow = true;
   scene.add(ground);
-  scene.add(new THREE.GridHelper(WORLD_HALF_X * 2, WORLD_HALF_X, 0x2f4a29, 0x2f4a29));
+  const gridHelper = new THREE.GridHelper(WORLD_HALF_X * 2, WORLD_HALF_X, 0x2f4a29, 0x2f4a29);
+  scene.add(gridHelper);
+
+  let isDay = true;
+  let dayFactor = 1;
 
   const player = new THREE.Mesh(
     new THREE.CapsuleGeometry(0.35, 0.6, 4, 8),
@@ -255,6 +270,31 @@ export function initGame(container) {
     );
     sun.target.position.copy(player.position);
 
+    const elapsedMs = timer.getElapsed() * 1000;
+    const cycleT = (elapsedMs % DAY_LENGTH_MS) / DAY_LENGTH_MS;
+    dayFactor = (Math.sin(cycleT * Math.PI * 2 + Math.PI / 2) + 1) / 2;
+    isDay = dayFactor > 0.5;
+
+    scene.background.copy(NIGHT_BG).lerp(DAY_BG, dayFactor);
+    scene.fog.color.copy(scene.background);
+    scene.fog.near = THREE.MathUtils.lerp(NIGHT_FOG.near, DAY_FOG.near, dayFactor);
+    scene.fog.far = THREE.MathUtils.lerp(NIGHT_FOG.far, DAY_FOG.far, dayFactor);
+    ambient.intensity = THREE.MathUtils.lerp(NIGHT_AMBIENT.intensity, DAY_AMBIENT.intensity, dayFactor);
+    ambient.color.copy(NIGHT_AMBIENT.color).lerp(DAY_AMBIENT.color, dayFactor);
+    sun.intensity = THREE.MathUtils.lerp(NIGHT_SUN.intensity, DAY_SUN.intensity, dayFactor);
+    sun.color.copy(NIGHT_SUN.color).lerp(DAY_SUN.color, dayFactor);
+    gridHelper.material.color.setScalar(THREE.MathUtils.lerp(0.35, 1, dayFactor));
+
+    const t = elapsedMs / 1000;
+    structures.forEach((s) => {
+      s.mesh.traverse((obj) => {
+        if (obj.isLight && obj.userData.baseIntensity !== undefined) {
+          const flicker = Math.sin(t * 3 + obj.id) * 0.18 + Math.sin(t * 7.3 + obj.id * 2) * 0.09;
+          obj.intensity = Math.max(0.3, obj.userData.baseIntensity + flicker);
+        }
+      });
+    });
+
     updateGhost();
 
     renderer.render(scene, camera);
@@ -289,7 +329,10 @@ export function initGame(container) {
 
   animate();
 
-  return { scene, camera, renderer, player, nodes, structures };
+  return {
+    scene, camera, renderer, player, nodes, structures,
+    getTimeOfDay: () => ({ isDay, dayFactor }),
+  };
 }
 
 function spawnNodes(scene) {
