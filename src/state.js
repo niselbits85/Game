@@ -2,18 +2,20 @@ export const RECIPES = [
   { id: 'axe', name: 'Axe', cost: { wood: 5, stone: 2 }, boosts: 'wood', desc: 'Doubles wood per chop' },
   { id: 'pickaxe', name: 'Pickaxe', cost: { wood: 4, stone: 3 }, boosts: 'stone', desc: 'Doubles stone per mine' },
   { id: 'basket', name: 'Basket', cost: { wood: 3, fiber: 4 }, boosts: 'fiber', desc: 'Doubles fiber per forage' },
+  { id: 'torch', name: 'Torch', cost: { wood: 2, fiber: 1 }, desc: 'Carry a light to see in the dark' },
 ];
 
 export const BUILDINGS = [
   { id: 'wall', name: 'Wall', cost: { wood: 3 }, desc: 'A simple fence segment' },
   { id: 'campfire', name: 'Campfire', cost: { wood: 4, stone: 2 }, desc: 'A cozy fire for your base' },
   { id: 'chest', name: 'Storage Chest', cost: { wood: 5, fiber: 2 }, desc: 'Right-click to store resources' },
-  { id: 'torch', name: 'Torch', cost: { wood: 2, fiber: 1 }, desc: 'Cheap, portable light for the dark' },
 ];
 
 export const state = {
   inventory: { wood: 0, stone: 0, fiber: 0 },
-  crafted: { axe: false, pickaxe: false, basket: false },
+  crafted: {
+    axe: false, pickaxe: false, basket: false, torch: false,
+  },
   selectedBuilding: null,
 };
 

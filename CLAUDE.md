@@ -24,16 +24,19 @@ player rather than the whole world, since it only ever needs to cover what's on 
 - `src/main.js` — calls `initGame()` to boot the three.js scene into `#app`, and imports `ui.js` to wire
   up the sidebar. No framework — just two independent entry points sharing `state.js`.
 - `src/game.js` — the entire game world: scene/camera/lighting setup, procedural node/player/structure
-  meshes (`buildTree`/`buildRock`/`buildBush`/`buildPlayer`, `buildWall`/`buildCampfire`/`buildChest`/
-  `buildTorch` — no `assets/` folder, no loaded models), keyboard movement, raycaster-based click-to-gather,
-  node respawn, structure placement, and the screen-projected floating pickup/feedback text.
-  `RESOURCE_DEFS` at the top controls color/respawn time/count per resource type — add a new type there
-  and give it a builder in `BUILDERS`.
+  meshes (`buildTree`/`buildRock`/`buildBush`/`buildPlayer`, `buildWall`/`buildCampfire`/`buildChest` — no
+  `assets/` folder, no loaded models), keyboard movement, raycaster-based click-to-gather, node respawn,
+  structure placement, and the screen-projected floating pickup/feedback text. `RESOURCE_DEFS` at the top
+  controls color/respawn time/count per resource type — add a new type there and give it a builder in
+  `BUILDERS`.
 - `src/state.js` — the single source of truth for inventory counts, crafted tools, recipes (`RECIPES`),
   placeable structures (`BUILDINGS`), and which one is currently selected for placement
   (`state.selectedBuilding`). Framework-agnostic on purpose: `game.js` (`addResource`, `yieldMultiplier`,
   `canAfford`, `spendResources`) and the DOM UI (`craft`, `canCraft`, `selectBuilding`) read/write through
-  it rather than each other, and `onChange` lets the DOM UI re-render whenever it changes.
+  it rather than each other, and `onChange` lets the DOM UI re-render whenever it changes. `RECIPES` is
+  for one-time permanent player upgrades (gather-boosting tools, the held Torch); `BUILDINGS` is for
+  structures placed and removable in the world — a "buildable" thing that should instead attach to the
+  player and stay forever belongs in `RECIPES`, not `BUILDINGS`, however it got introduced in conversation.
 - `src/ui.js` — renders the inventory, crafting, and build panels into the `#inventory`/`#recipes`/
   `#buildings` elements defined in `index.html`, and handles craft/build button clicks. Plain DOM — the
   game canvas and the sidebar are two independent renderers kept in sync only through `state.js`.
@@ -88,8 +91,10 @@ The floating "+1" pickup text (`floatText`) re-projects the node's world positio
 every frame for its short lifetime, not just once — since the camera moves every frame too, a one-shot
 projection would drift out of alignment with the node while it fades.
 
-To add a new craftable tool: add an entry to `RECIPES` in `state.js` with a `boosts` field naming the
-resource type it doubles — `yieldMultiplier()` and the UI panel pick it up automatically.
+To add a new craftable gather-boosting tool: add an entry to `RECIPES` in `state.js` with a `boosts`
+field naming the resource type it doubles — `yieldMultiplier()` and the UI panel pick it up
+automatically. `boosts` is optional — a recipe without one (like `torch`) just has some other effect
+that `game.js` reads directly off `state.crafted.<id>` (see the held Torch below), not a gather bonus.
 
 ### Visual style
 
@@ -113,12 +118,24 @@ lights dim — don't add manual tinting for new lit geometry, only for new *unli
 `LineBasicMaterial`) elements. `initGame()` returns a `getTimeOfDay()` getter exposing `{ isDay, dayFactor }`;
 `main.js` polls it every 500ms to flip the `#dayNight` badge.
 
-Placed campfires (and the cheaper, weaker Torch) get an organic flicker independent of the day/night
-lerp: `buildCampfire`/`buildTorch` tag their `PointLight` with `userData.baseIntensity`, and the animate
-loop walks every entry in `structures` each frame applying a two-frequency sine wiggle on top of that
-base value. A stronger point light than the original tuning was needed for the glow to read clearly once
-night darkens the ambient/sun down near their `NIGHT_*` floors — if you add another light-emitting
-structure, tag it with `baseIntensity` the same way to get the flicker for free.
+Placed campfires (and the held Torch, see below) get an organic flicker independent of the day/night
+lerp: their builders tag the `PointLight` with `userData.baseIntensity`, and `flickerLight(light, t)`
+(called each frame for every structure's light plus the held torch light) applies a two-frequency sine
+wiggle on top of that base value. A stronger point light than the original tuning was needed for the
+glow to read clearly once night darkens the ambient/sun down near their `NIGHT_*` floors — if you add
+another light-emitting mesh, tag its light with `baseIntensity` the same way and pass it through
+`flickerLight` to get the flicker for free.
+
+### Held items
+
+The Torch is a `RECIPES` entry with no `boosts` — crafting it (`craft()` in `state.js`, same as
+Axe/Pickaxe/Basket) sets `state.crafted.torch = true` permanently, and `game.js`'s `syncHeldTorch()`
+(subscribed via `onChange`, called once at startup too) reacts by building `buildHeldTorch()` and
+`player.add()`-ing it. Because it's parented to the `player` group rather than positioned in world space
+each frame, it automatically follows the player through three.js's normal scene-graph transform
+inheritance — no per-frame position syncing needed, unlike the campfire-style structures or the sun.
+There's no un-craft/unequip path, matching every other `RECIPES` entry (the Craft panel disables the
+button and shows a checkmark once `state.crafted.torch` is true).
 
 ## Notes for future instances
 

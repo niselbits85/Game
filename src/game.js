@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {
-  addResource, yieldMultiplier, state, BUILDINGS, canAfford, spendResources, selectBuilding,
+  addResource, yieldMultiplier, state, BUILDINGS, canAfford, spendResources, selectBuilding, onChange,
 } from './state.js';
 import { openChestMenu } from './chestMenu.js';
 
@@ -149,30 +149,27 @@ function buildChest() {
   return group;
 }
 
-function buildTorch() {
+const STRUCTURE_BUILDERS = { wall: buildWall, campfire: buildCampfire, chest: buildChest };
+
+// Attached directly to the player group (not placed in the world) once the Torch recipe
+// is crafted - see syncHeldTorch() in initGame. Boxy + toon-shaded to match buildPlayer.
+function buildHeldTorch() {
   const group = new THREE.Group();
-  const post = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.05, 0.06, 0.9, 6),
-    new THREE.MeshStandardMaterial({ color: 0x6b4a2f }),
-  );
-  post.position.y = 0.45;
+  const post = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.5, 0.08), toonMat(0x6b4a2f));
+  post.position.y = 0.25;
   post.castShadow = true;
-  const flame = new THREE.Mesh(
-    new THREE.ConeGeometry(0.12, 0.26, 8),
-    new THREE.MeshStandardMaterial({ color: 0xff8a3d, emissive: 0xff5500, emissiveIntensity: 0.6 }),
-  );
-  flame.position.y = 1.03;
+  const flame = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.18, 0.16), toonMat(0xff8a3d));
+  flame.position.y = 0.55;
   group.add(post, flame);
   const light = new THREE.PointLight(0xffa040, 1.3, 7, 2);
-  light.position.y = 1.0;
+  light.position.y = 0.55;
   light.userData.baseIntensity = 1.3;
   group.add(light);
+
+  group.position.set(0.32, 0.35, 0.12);
+  group.rotation.z = -0.35;
   return group;
 }
-
-const STRUCTURE_BUILDERS = {
-  wall: buildWall, campfire: buildCampfire, chest: buildChest, torch: buildTorch,
-};
 
 export function initGame(container) {
   const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -216,6 +213,17 @@ export function initGame(container) {
 
   const player = buildPlayer(0x4fd1ff);
   scene.add(player);
+
+  let heldTorchLight = null;
+  function syncHeldTorch() {
+    if (state.crafted.torch && !heldTorchLight) {
+      const torch = buildHeldTorch();
+      player.add(torch);
+      torch.traverse((obj) => { if (obj.isLight) heldTorchLight = obj; });
+    }
+  }
+  syncHeldTorch();
+  onChange(syncHeldTorch);
 
   const ringGeo = new THREE.RingGeometry(INTERACT_RADIUS - 0.05, INTERACT_RADIUS, 48);
   const rangeRing = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({
@@ -357,13 +365,9 @@ export function initGame(container) {
 
     const t = elapsedMs / 1000;
     structures.forEach((s) => {
-      s.mesh.traverse((obj) => {
-        if (obj.isLight && obj.userData.baseIntensity !== undefined) {
-          const flicker = Math.sin(t * 3 + obj.id) * 0.18 + Math.sin(t * 7.3 + obj.id * 2) * 0.09;
-          obj.intensity = Math.max(0.3, obj.userData.baseIntensity + flicker);
-        }
-      });
+      s.mesh.traverse((obj) => { flickerLight(obj, t); });
     });
+    if (heldTorchLight) flickerLight(heldTorchLight, t);
 
     updateGhost();
 
@@ -459,6 +463,12 @@ function tryGather(node, player, scene, nodes, structures) {
     node.available = true;
     node.mesh.visible = true;
   }, node.def.respawnMs);
+}
+
+function flickerLight(light, t) {
+  if (!light.isLight || light.userData.baseIntensity === undefined) return;
+  const wiggle = Math.sin(t * 3 + light.id) * 0.18 + Math.sin(t * 7.3 + light.id * 2) * 0.09;
+  light.intensity = Math.max(0.3, light.userData.baseIntensity + wiggle);
 }
 
 function snapToGrid(x, z) {
