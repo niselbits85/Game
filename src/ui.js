@@ -1,4 +1,6 @@
-import { state, onChange, RECIPES, canCraft, craft, BUILDINGS, canAfford, selectBuilding } from './state.js';
+import {
+  state, onChange, RECIPES, canCraft, craft, BUILDINGS, canAfford, selectBuilding, toggleTorch,
+} from './state.js';
 
 const invEl = document.getElementById('inventory');
 const recipesEl = document.getElementById('recipes');
@@ -16,6 +18,16 @@ function render() {
     const done = state.crafted[r.id];
     const ok = canCraft(r);
     const costStr = Object.entries(r.cost).map(([res, amt]) => `${amt} ${cap(res)}`).join(', ');
+
+    if (r.id === 'torch' && done) {
+      const equipped = state.torchEquipped;
+      return `
+        <button class="recipe toggle${equipped ? ' done' : ''}" data-toggle="torch">
+          <div class="rname">${r.name} — ${equipped ? 'Equipped' : 'Unequipped'}</div>
+          <div class="rdesc">${equipped ? 'Click to put it away' : 'Click to carry it again'}</div>
+        </button>`;
+    }
+
     return `
       <button class="recipe${done ? ' done' : ''}" data-id="${r.id}" ${done || !ok ? 'disabled' : ''}>
         <div class="rname">${r.name}${done ? ' ✓' : ''}</div>
@@ -42,6 +54,8 @@ function render() {
 }
 
 recipesEl.addEventListener('click', (e) => {
+  const toggleBtn = e.target.closest('button[data-toggle]');
+  if (toggleBtn) { toggleTorch(); return; }
   const btn = e.target.closest('button[data-id]');
   if (!btn) return;
   const recipe = RECIPES.find((r) => r.id === btn.dataset.id);

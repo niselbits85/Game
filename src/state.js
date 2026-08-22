@@ -16,6 +16,7 @@ export const state = {
   crafted: {
     axe: false, pickaxe: false, basket: false, torch: false,
   },
+  torchEquipped: false,
   selectedBuilding: null,
 };
 
@@ -51,8 +52,15 @@ export function craft(recipe) {
   if (state.crafted[recipe.id] || !canCraft(recipe)) return false;
   spendResources(recipe.cost);
   state.crafted[recipe.id] = true;
+  if (recipe.id === 'torch') state.torchEquipped = true;
   notify();
   return true;
+}
+
+export function toggleTorch() {
+  if (!state.crafted.torch) return;
+  state.torchEquipped = !state.torchEquipped;
+  notify();
 }
 
 export function selectBuilding(id) {

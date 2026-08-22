@@ -8,7 +8,8 @@ Move with WASD or arrow keys. Click a resource node while you're within range (t
 your character) to gather from it — it depletes and respawns a few seconds later. Use the Craft panel
 to spend resources on an Axe, Pickaxe, or Basket (each doubling the yield of one resource type), or a
 Torch (2 Wood, 1 Fiber) — once crafted, your character carries it, lighting the area around you wherever
-you go.
+you go. Crafting equips it immediately; click it again any time to put it away or carry it again — free,
+no need to recraft it.
 
 Use the Build panel to place structures — a Wall, Campfire, or Storage Chest — near yourself. Pick one,
 then click the ground: a green preview means the spot is valid, red means it's too far, blocked by

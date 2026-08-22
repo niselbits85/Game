@@ -151,8 +151,8 @@ function buildChest() {
 
 const STRUCTURE_BUILDERS = { wall: buildWall, campfire: buildCampfire, chest: buildChest };
 
-// Attached directly to the player group (not placed in the world) once the Torch recipe
-// is crafted - see syncHeldTorch() in initGame. Boxy + toon-shaded to match buildPlayer.
+// Attached directly to the player group (not placed in the world) whenever the Torch is
+// equipped - see syncHeldTorch() in initGame. Boxy + toon-shaded to match buildPlayer.
 function buildHeldTorch() {
   const group = new THREE.Group();
   const post = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.5, 0.08), toonMat(0x6b4a2f));
@@ -214,12 +214,18 @@ export function initGame(container) {
   const player = buildPlayer(0x4fd1ff);
   scene.add(player);
 
+  let heldTorchGroup = null;
   let heldTorchLight = null;
   function syncHeldTorch() {
-    if (state.crafted.torch && !heldTorchLight) {
-      const torch = buildHeldTorch();
-      player.add(torch);
-      torch.traverse((obj) => { if (obj.isLight) heldTorchLight = obj; });
+    if (state.torchEquipped && !heldTorchGroup) {
+      heldTorchGroup = buildHeldTorch();
+      player.add(heldTorchGroup);
+      heldTorchGroup.traverse((obj) => { if (obj.isLight) heldTorchLight = obj; });
+    } else if (!state.torchEquipped && heldTorchGroup) {
+      player.remove(heldTorchGroup);
+      disposeMesh(heldTorchGroup);
+      heldTorchGroup = null;
+      heldTorchLight = null;
     }
   }
   syncHeldTorch();

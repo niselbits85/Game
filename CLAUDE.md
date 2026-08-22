@@ -128,14 +128,21 @@ another light-emitting mesh, tag its light with `baseIntensity` the same way and
 
 ### Held items
 
-The Torch is a `RECIPES` entry with no `boosts` — crafting it (`craft()` in `state.js`, same as
-Axe/Pickaxe/Basket) sets `state.crafted.torch = true` permanently, and `game.js`'s `syncHeldTorch()`
-(subscribed via `onChange`, called once at startup too) reacts by building `buildHeldTorch()` and
-`player.add()`-ing it. Because it's parented to the `player` group rather than positioned in world space
-each frame, it automatically follows the player through three.js's normal scene-graph transform
-inheritance — no per-frame position syncing needed, unlike the campfire-style structures or the sun.
-There's no un-craft/unequip path, matching every other `RECIPES` entry (the Craft panel disables the
-button and shows a checkmark once `state.crafted.torch` is true).
+The Torch is a `RECIPES` entry with no `boosts`, but unlike Axe/Pickaxe/Basket it isn't a permanent
+one-shot unlock — it's got two independent flags in `state.js`: `state.crafted.torch` (do you own one at
+all, set once by `craft()` and never unset, same as the other recipes) and `state.torchEquipped` (is it
+currently in-hand, toggled freely by `toggleTorch()`). Crafting auto-equips (`craft()` sets both flags
+together). `game.js`'s `syncHeldTorch()` (subscribed via `onChange`, called once at startup too) reads
+`torchEquipped` each time and adds or removes `buildHeldTorch()` from the `player` group to match —
+`disposeMesh` on removal, same as demolishing a structure, so toggling repeatedly doesn't leak GPU
+resources. Being a child of `player` rather than positioned in world space each frame means it
+automatically follows the player through three.js's normal scene-graph transform inheritance while
+equipped — no per-frame position syncing needed, unlike the campfire-style structures or the sun.
+
+In `ui.js`, once `state.crafted.torch` is true the Craft panel swaps that recipe's normal "buy" button
+for a permanently-enabled toggle (`data-toggle="torch"`, handled before the generic `data-id` craft
+handler) showing Equipped/Unequipped and calling `toggleTorch()` — toggling never spends or refunds
+resources, only the one-time `craft()` does.
 
 ## Notes for future instances
 
