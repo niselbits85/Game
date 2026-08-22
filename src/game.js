@@ -12,6 +12,8 @@ const INTERACT_RADIUS = 4.2;
 const PLACEMENT_RADIUS = 9;
 const GRID_SIZE = 2;
 const PLACEMENT_MIN_DIST = 1.1;
+const NODE_MARGIN = 2;
+const NODE_MIN_DIST = 2.4;
 const CAMERA_OFFSET = new THREE.Vector3(0, 22, 15);
 const SUN_OFFSET = new THREE.Vector3(8, 16, 6);
 
@@ -233,7 +235,7 @@ export function initGame(container) {
     let obj = hits[0].object;
     while (obj.parent && !obj.userData.node) obj = obj.parent;
     const node = obj.userData.node;
-    if (node) tryGather(node, player, scene);
+    if (node) tryGather(node, player, scene, nodes, structures);
   });
 
   const timer = new THREE.Timer();
@@ -336,13 +338,11 @@ export function initGame(container) {
 }
 
 function spawnNodes(scene) {
-  const margin = 2;
-  const minDist = 2.4;
   const nodes = [];
 
   Object.entries(RESOURCE_DEFS).forEach(([type, def]) => {
     for (let i = 0; i < def.counts; i++) {
-      const pos = pickSpot(nodes, margin, minDist);
+      const pos = pickSpot(nodes, NODE_MARGIN, NODE_MIN_DIST);
       const mesh = BUILDERS[type](def.color);
       mesh.position.x = pos.x;
       mesh.position.z = pos.z;
@@ -368,7 +368,7 @@ function pickSpot(existing, margin, minDist) {
   return { x: THREE.MathUtils.randFloat(-maxX, maxX), z: THREE.MathUtils.randFloat(-maxZ, maxZ) };
 }
 
-function tryGather(node, player, scene) {
+function tryGather(node, player, scene, nodes, structures) {
   if (!node.available) return;
   const dist = Math.hypot(node.x - player.position.x, node.z - player.position.z);
   if (dist > INTERACT_RADIUS) {
@@ -382,6 +382,12 @@ function tryGather(node, player, scene) {
   node.available = false;
   node.mesh.visible = false;
   setTimeout(() => {
+    const others = nodes.filter((n) => n !== node).concat(structures);
+    const pos = pickSpot(others, NODE_MARGIN, NODE_MIN_DIST);
+    node.x = pos.x;
+    node.z = pos.z;
+    node.mesh.position.x = pos.x;
+    node.mesh.position.z = pos.z;
     node.available = true;
     node.mesh.visible = true;
   }, node.def.respawnMs);

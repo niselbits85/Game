@@ -58,6 +58,10 @@ Gather interaction is proximity-based, not click-adjacent: a click raycasts agai
 the player's position decides whether the click actually lands. Keep both checks if you touch this path —
 the raycast alone doesn't enforce range.
 
+A depleted node doesn't respawn in place — `tryGather`'s `setTimeout` calls `pickSpot` again (same
+`NODE_MARGIN`/`NODE_MIN_DIST` used at world-build time) to relocate it somewhere else clear of every
+other node and structure, then moves its existing mesh there rather than creating a new one.
+
 The floating "+1" pickup text (`floatText`) re-projects the node's world position to screen space on
 every frame for its short lifetime, not just once — since the camera moves every frame too, a one-shot
 projection would drift out of alignment with the node while it fades.
