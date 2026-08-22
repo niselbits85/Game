@@ -149,7 +149,30 @@ function buildChest() {
   return group;
 }
 
-const STRUCTURE_BUILDERS = { wall: buildWall, campfire: buildCampfire, chest: buildChest };
+function buildTorch() {
+  const group = new THREE.Group();
+  const post = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.05, 0.06, 0.9, 6),
+    new THREE.MeshStandardMaterial({ color: 0x6b4a2f }),
+  );
+  post.position.y = 0.45;
+  post.castShadow = true;
+  const flame = new THREE.Mesh(
+    new THREE.ConeGeometry(0.12, 0.26, 8),
+    new THREE.MeshStandardMaterial({ color: 0xff8a3d, emissive: 0xff5500, emissiveIntensity: 0.6 }),
+  );
+  flame.position.y = 1.03;
+  group.add(post, flame);
+  const light = new THREE.PointLight(0xffa040, 1.3, 7, 2);
+  light.position.y = 1.0;
+  light.userData.baseIntensity = 1.3;
+  group.add(light);
+  return group;
+}
+
+const STRUCTURE_BUILDERS = {
+  wall: buildWall, campfire: buildCampfire, chest: buildChest, torch: buildTorch,
+};
 
 export function initGame(container) {
   const renderer = new THREE.WebGLRenderer({ antialias: true });

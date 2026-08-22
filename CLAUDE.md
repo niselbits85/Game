@@ -24,11 +24,11 @@ player rather than the whole world, since it only ever needs to cover what's on 
 - `src/main.js` — calls `initGame()` to boot the three.js scene into `#app`, and imports `ui.js` to wire
   up the sidebar. No framework — just two independent entry points sharing `state.js`.
 - `src/game.js` — the entire game world: scene/camera/lighting setup, procedural node/player/structure
-  meshes (`buildTree`/`buildRock`/`buildBush`/`buildPlayer`, `buildWall`/`buildCampfire`/`buildChest` — no
-  `assets/` folder, no loaded models), keyboard movement, raycaster-based click-to-gather, node respawn,
-  structure placement, and the screen-projected floating pickup/feedback text. `RESOURCE_DEFS` at the top
-  controls color/respawn time/count per resource type — add a new type there and give it a builder in
-  `BUILDERS`.
+  meshes (`buildTree`/`buildRock`/`buildBush`/`buildPlayer`, `buildWall`/`buildCampfire`/`buildChest`/
+  `buildTorch` — no `assets/` folder, no loaded models), keyboard movement, raycaster-based click-to-gather,
+  node respawn, structure placement, and the screen-projected floating pickup/feedback text.
+  `RESOURCE_DEFS` at the top controls color/respawn time/count per resource type — add a new type there
+  and give it a builder in `BUILDERS`.
 - `src/state.js` — the single source of truth for inventory counts, crafted tools, recipes (`RECIPES`),
   placeable structures (`BUILDINGS`), and which one is currently selected for placement
   (`state.selectedBuilding`). Framework-agnostic on purpose: `game.js` (`addResource`, `yieldMultiplier`,
@@ -113,14 +113,20 @@ lights dim — don't add manual tinting for new lit geometry, only for new *unli
 `LineBasicMaterial`) elements. `initGame()` returns a `getTimeOfDay()` getter exposing `{ isDay, dayFactor }`;
 `main.js` polls it every 500ms to flip the `#dayNight` badge.
 
-Placed campfires get an organic flicker independent of the day/night lerp: `buildCampfire` tags its
-`PointLight` with `userData.baseIntensity`, and the animate loop walks every entry in `structures` each
-frame applying a two-frequency sine wiggle on top of that base value. A stronger point light
-(intensity 1.8, range 9) than the original tuning was needed for the glow to read clearly once night
-darkens the ambient/sun down near their `NIGHT_*` floors — if you add another light-emitting structure,
-tag it with `baseIntensity` the same way to get the flicker for free.
+Placed campfires (and the cheaper, weaker Torch) get an organic flicker independent of the day/night
+lerp: `buildCampfire`/`buildTorch` tag their `PointLight` with `userData.baseIntensity`, and the animate
+loop walks every entry in `structures` each frame applying a two-frequency sine wiggle on top of that
+base value. A stronger point light than the original tuning was needed for the glow to read clearly once
+night darkens the ambient/sun down near their `NIGHT_*` floors — if you add another light-emitting
+structure, tag it with `baseIntensity` the same way to get the flicker for free.
 
 ## Notes for future instances
 
 - This folder is a git repository scoped to itself — do not run `git init` in a parent directory that
   contains unrelated files (e.g. the user's home directory).
+- The sidebar (`#sidebar`) has grown past a typical short viewport's height as more Build/Craft entries
+  were added, so the page can scroll. This matters for headless browser testing specifically: clicking a
+  below-the-fold sidebar button (e.g. a newer Build entry) can auto-scroll the page, which invalidates a
+  canvas `boundingBox()` captured earlier in the script — re-measure it after such a click rather than
+  reusing a cached one, or use a locator's own relative-position click (immune to this) instead of raw
+  page coordinates.
