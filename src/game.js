@@ -238,6 +238,20 @@ export function initGame(container) {
     if (node) tryGather(node, player, scene, nodes, structures);
   });
 
+  renderer.domElement.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    const rect = renderer.domElement.getBoundingClientRect();
+    pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    raycaster.setFromCamera(pointer, camera);
+    const hits = raycaster.intersectObjects(structures.map((s) => s.mesh), true);
+    if (!hits.length) return;
+    let obj = hits[0].object;
+    while (obj.parent && !obj.userData.structure) obj = obj.parent;
+    const structure = obj.userData.structure;
+    if (structure) tryRemove(structure, player, scene, structures);
+  });
+
   const timer = new THREE.Timer();
   function animate() {
     requestAnimationFrame(animate);
@@ -438,8 +452,41 @@ function tryPlace(buildId, x, z, scene, structures, nodes, player) {
   mesh.position.x = x;
   mesh.position.z = z;
   scene.add(mesh);
-  structures.push({ id: buildId, mesh, x, z });
+  const structure = { id: buildId, mesh, x, z };
+  mesh.userData.structure = structure;
+  structures.push(structure);
   floatText(scene, marker, `${def.name} built`, '#7fd97f');
+}
+
+function tryRemove(structure, player, scene, structures) {
+  const dist = Math.hypot(structure.x - player.position.x, structure.z - player.position.z);
+  if (dist > PLACEMENT_RADIUS) {
+    floatText(scene, structure.mesh.position, 'Too far', '#e86a6a');
+    return;
+  }
+  const idx = structures.indexOf(structure);
+  if (idx !== -1) structures.splice(idx, 1);
+  scene.remove(structure.mesh);
+  disposeMesh(structure.mesh);
+
+  const def = BUILDINGS.find((b) => b.id === structure.id);
+  const marker = structure.mesh.position.clone();
+  if (def) {
+    Object.entries(def.cost).forEach(([res, amt]) => addResource(res, amt));
+    const refund = Object.entries(def.cost).map(([res, amt]) => `+${amt} ${res}`).join(', ');
+    floatText(scene, marker, `${def.name} removed (${refund})`, '#7fd97f');
+  } else {
+    floatText(scene, marker, 'Removed', '#7fd97f');
+  }
+}
+
+function disposeMesh(mesh) {
+  mesh.traverse((obj) => {
+    if (obj.geometry) obj.geometry.dispose();
+    if (obj.material) {
+      (Array.isArray(obj.material) ? obj.material : [obj.material]).forEach((m) => m.dispose());
+    }
+  });
 }
 
 function floatText(scene, position, msg, color) {

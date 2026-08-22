@@ -53,6 +53,14 @@ To add a new structure type: add an entry to `BUILDINGS` in `state.js` and a bui
 `STRUCTURE_BUILDERS` in `game.js`; placement, cost-checking, and the ghost preview all pick it up
 automatically.
 
+Right-clicking a placed structure removes it and fully refunds its cost (`tryRemove`, bound to the
+canvas's `contextmenu` event, separate from the left-click `pointerdown` handler so it can't conflict
+with gather/placement). Every structure's mesh is tagged with `mesh.userData.structure` pointing back at
+its `{ id, mesh, x, z }` record — same pattern as `mesh.userData.node` on resource nodes — so the
+raycast hit can walk up to find the record to remove. `tryRemove` also disposes the mesh's geometry and
+materials (`disposeMesh`), unlike node respawn/hide, since structures are actually destroyed rather than
+just toggled invisible and reused.
+
 Gather interaction is proximity-based, not click-adjacent: a click raycasts against node meshes to find
 *which* node was clicked, then a separate flat-distance check (`INTERACT_RADIUS`, in world X/Z) against
 the player's position decides whether the click actually lands. Keep both checks if you touch this path —
