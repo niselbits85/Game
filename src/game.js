@@ -17,6 +17,7 @@ const NODE_MARGIN = 2;
 const NODE_MIN_DIST = 2.4;
 const CAMERA_OFFSET = new THREE.Vector3(0, 22, 15);
 const SUN_OFFSET = new THREE.Vector3(8, 16, 6);
+const GARDEN_REGROW_MS = 8000;
 
 const DAY_LENGTH_MS = 90000;
 const DAY_BG = new THREE.Color(0x151a12);
@@ -180,10 +181,118 @@ function buildDoor() {
   return group;
 }
 
+function buildWatchtower() {
+  const group = new THREE.Group();
+  const legMat = new THREE.MeshStandardMaterial({ color: 0x6b4a2f });
+  const legGeo = new THREE.BoxGeometry(0.15, 2.0, 0.15);
+  [[-0.35, -0.35], [0.35, -0.35], [-0.35, 0.35], [0.35, 0.35]].forEach(([lx, lz]) => {
+    const leg = new THREE.Mesh(legGeo, legMat);
+    leg.position.set(lx, 1.0, lz);
+    leg.castShadow = true;
+    group.add(leg);
+  });
+  const deck = new THREE.Mesh(
+    new THREE.BoxGeometry(1.0, 0.15, 1.0),
+    new THREE.MeshStandardMaterial({ color: 0x8a6a45 }),
+  );
+  deck.position.y = 2.05;
+  deck.castShadow = true;
+  const roof = new THREE.Mesh(
+    new THREE.ConeGeometry(0.75, 0.5, 4),
+    new THREE.MeshStandardMaterial({ color: 0x5c5c5c }),
+  );
+  roof.position.y = 2.4;
+  roof.rotation.y = Math.PI / 4;
+  roof.castShadow = true;
+  group.add(deck, roof);
+  return group;
+}
+
+function buildWell() {
+  const group = new THREE.Group();
+  const ring = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.45, 0.5, 0.5, 10),
+    new THREE.MeshStandardMaterial({ color: 0x8a8a8a, flatShading: true }),
+  );
+  ring.position.y = 0.25;
+  ring.castShadow = true;
+  ring.receiveShadow = true;
+  const postMat = new THREE.MeshStandardMaterial({ color: 0x6b4a2f });
+  const postGeo = new THREE.BoxGeometry(0.1, 0.8, 0.1);
+  const postL = new THREE.Mesh(postGeo, postMat);
+  postL.position.set(-0.4, 0.9, 0);
+  postL.castShadow = true;
+  const postR = new THREE.Mesh(postGeo, postMat);
+  postR.position.set(0.4, 0.9, 0);
+  postR.castShadow = true;
+  const roof = new THREE.Mesh(
+    new THREE.ConeGeometry(0.6, 0.4, 4),
+    new THREE.MeshStandardMaterial({ color: 0x5c3a2a }),
+  );
+  roof.position.y = 1.5;
+  roof.rotation.y = Math.PI / 4;
+  roof.castShadow = true;
+  group.add(ring, postL, postR, roof);
+  return group;
+}
+
+function buildBench() {
+  const group = new THREE.Group();
+  const mat = new THREE.MeshStandardMaterial({ color: 0x8a6a45 });
+  const seat = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.12, 0.35), mat);
+  seat.position.y = 0.35;
+  seat.castShadow = true;
+  const legGeo = new THREE.BoxGeometry(0.1, 0.35, 0.3);
+  const legL = new THREE.Mesh(legGeo, mat);
+  legL.position.set(-0.35, 0.17, 0);
+  legL.castShadow = true;
+  const legR = new THREE.Mesh(legGeo, mat);
+  legR.position.set(0.35, 0.17, 0);
+  legR.castShadow = true;
+  group.add(seat, legL, legR);
+  return group;
+}
+
+// The "plant" mesh is stashed on userData (same tag-and-look-up pattern as buildDoor's
+// pivot) so tryHarvestGarden/scheduleGardenRegrow can scale it down while growing and back
+// up when ready, without a second lookup table.
+function buildGardenBed() {
+  const group = new THREE.Group();
+  const frame = new THREE.Mesh(
+    new THREE.BoxGeometry(0.9, 0.25, 0.7),
+    new THREE.MeshStandardMaterial({ color: 0x6b4a2f }),
+  );
+  frame.position.y = 0.125;
+  frame.castShadow = true;
+  frame.receiveShadow = true;
+  const soil = new THREE.Mesh(
+    new THREE.BoxGeometry(0.78, 0.06, 0.58),
+    new THREE.MeshStandardMaterial({ color: 0x3b2a1e }),
+  );
+  soil.position.y = 0.23;
+  const plant = new THREE.Mesh(
+    new THREE.SphereGeometry(0.22, 8, 6),
+    new THREE.MeshStandardMaterial({ color: 0x9fe08f }),
+  );
+  plant.position.y = 0.4;
+  plant.castShadow = true;
+  group.add(frame, soil, plant);
+  group.userData.plantMesh = plant;
+  return group;
+}
+
 const STRUCTURE_BUILDERS = {
-  wall: buildWall, campfire: buildCampfire, chest: buildChest, door: buildDoor,
+  wall: buildWall,
+  campfire: buildCampfire,
+  chest: buildChest,
+  door: buildDoor,
+  watchtower: buildWatchtower,
+  well: buildWell,
+  bench: buildBench,
+  garden: buildGardenBed,
 };
 const LINE_ALIGNED_BUILDINGS = new Set(['wall', 'door']);
+const INTERACTIVE_BUILDINGS = new Set(['door', 'garden']);
 
 // Attached directly to the player group (not placed in the world) whenever the Torch is
 // equipped - see syncHeldTorch() in initGame. Boxy + toon-shaded to match buildPlayer.
@@ -328,15 +437,17 @@ export function initGame(container) {
     }
 
     raycaster.setFromCamera(pointer, camera);
-    const doorMeshes = structures.filter((s) => s.id === 'door').map((s) => s.mesh);
-    const hits = raycaster.intersectObjects([...nodes.map((n) => n.mesh), ...doorMeshes], true);
+    const interactiveMeshes = structures.filter((s) => INTERACTIVE_BUILDINGS.has(s.id)).map((s) => s.mesh);
+    const hits = raycaster.intersectObjects([...nodes.map((n) => n.mesh), ...interactiveMeshes], true);
     if (!hits.length) return;
     let obj = hits[0].object;
     while (obj.parent && !obj.userData.node && !obj.userData.structure) obj = obj.parent;
     if (obj.userData.node) {
       tryGather(obj.userData.node, player, scene, nodes, structures);
-    } else if (obj.userData.structure) {
+    } else if (obj.userData.structure?.id === 'door') {
       tryToggleDoor(obj.userData.structure, player, scene);
+    } else if (obj.userData.structure?.id === 'garden') {
+      tryHarvestGarden(obj.userData.structure, player, scene);
     }
   });
 
@@ -541,6 +652,32 @@ function tryToggleDoor(structure, player, scene) {
   floatText(scene, structure.mesh.position, structure.doorOpen ? 'Door opened' : 'Door closed', '#7fd97f');
 }
 
+function scheduleGardenRegrow(structure) {
+  setTimeout(() => {
+    structure.ready = true;
+    const plant = structure.mesh.userData.plantMesh;
+    if (plant) plant.scale.setScalar(1);
+  }, GARDEN_REGROW_MS);
+}
+
+function tryHarvestGarden(structure, player, scene) {
+  const dist = Math.hypot(structure.x - player.position.x, structure.z - player.position.z);
+  if (dist > INTERACT_RADIUS) {
+    floatText(scene, structure.mesh.position, 'Too far', '#e86a6a');
+    return;
+  }
+  if (!structure.ready) {
+    floatText(scene, structure.mesh.position, 'Still growing', '#e86a6a');
+    return;
+  }
+  addResource('fiber', 1);
+  floatText(scene, structure.mesh.position, '+1 Fiber', '#ffe066');
+  structure.ready = false;
+  const plant = structure.mesh.userData.plantMesh;
+  if (plant) plant.scale.setScalar(0.3);
+  scheduleGardenRegrow(structure);
+}
+
 // GridHelper's lines sit on multiples of GRID_SIZE. A structure's footprint should have
 // its edges land ON those lines, not straddle one - which needs different snapping per
 // axis depending on the structure's shape/orientation, so this returns both candidates
@@ -621,6 +758,11 @@ function tryPlace(buildId, x, z, rotationY, scene, structures, nodes, player) {
   const structure = { id: buildId, mesh, x, z };
   if (buildId === 'chest') structure.storage = { wood: 0, stone: 0, fiber: 0 };
   if (buildId === 'door') structure.doorOpen = false;
+  if (buildId === 'garden') {
+    structure.ready = false;
+    if (mesh.userData.plantMesh) mesh.userData.plantMesh.scale.setScalar(0.3);
+    scheduleGardenRegrow(structure);
+  }
   mesh.userData.structure = structure;
   structures.push(structure);
   floatText(scene, marker, `${def.name} built`, '#7fd97f');

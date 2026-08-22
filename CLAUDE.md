@@ -24,11 +24,12 @@ player rather than the whole world, since it only ever needs to cover what's on 
 - `src/main.js` — calls `initGame()` to boot the three.js scene into `#app`, and imports `ui.js` to wire
   up the sidebar. No framework — just two independent entry points sharing `state.js`.
 - `src/game.js` — the entire game world: scene/camera/lighting setup, procedural node/player/structure
-  meshes (`buildTree`/`buildRock`/`buildBush`/`buildPlayer`, `buildWall`/`buildCampfire`/`buildChest`/
-  `buildDoor` — no `assets/` folder, no loaded models), keyboard movement, raycaster-based click-to-gather,
-  node respawn, structure placement, and the screen-projected floating pickup/feedback text.
-  `RESOURCE_DEFS` at the top controls color/respawn time/count per resource type — add a new type there
-  and give it a builder in `BUILDERS`.
+  meshes (`buildTree`/`buildRock`/`buildBush`/`buildPlayer` for the world, `buildWall`/`buildCampfire`/
+  `buildChest`/`buildDoor`/`buildWatchtower`/`buildWell`/`buildBench`/`buildGardenBed` for `BUILDINGS` — no
+  `assets/` folder, no loaded models), keyboard movement, raycaster-based click-to-gather, node respawn,
+  structure placement, and the screen-projected floating pickup/feedback text. `RESOURCE_DEFS` at the top
+  controls color/respawn time/count per resource type — add a new type there and give it a builder in
+  `BUILDERS`.
 - `src/state.js` — the single source of truth for inventory counts, crafted tools, recipes (`RECIPES`),
   placeable structures (`BUILDINGS`), and which one is currently selected for placement
   (`state.selectedBuilding`). `game.js` (`addResource`, `yieldMultiplier`, `canAfford`, `spendResources`)
@@ -101,9 +102,15 @@ lazily instead (e.g. only inside `updateGhost`'s next animate-loop tick) let a f
 silently wiped by the deferred reset arriving a frame late. Placing several of the same structure in a
 row keeps whatever rotation you left it at, so a fence line doesn't need re-rotating per segment.
 
-**Interactive structures (the Door).** Outside placement mode, left-click used to only raycast against
-node meshes (for gathering); it now also raycasts door structures' meshes, and the closer hit decides
-whether the click gathers or calls `tryToggleDoor` (same `INTERACT_RADIUS` proximity gate as gathering).
+**Interactive structures (Door, Garden Bed).** Outside placement mode, left-click used to only raycast
+against node meshes (for gathering); it now also raycasts the meshes of every structure whose id is in
+`INTERACTIVE_BUILDINGS`, and the closer hit decides whether the click gathers or dispatches to that
+structure's own handler (same `INTERACT_RADIUS` proximity gate as gathering) based on `structure.id`. Most
+`BUILDINGS` entries (Wall, Campfire, Chest, Watchtower, Well, Bench) are purely place-and-remove — nothing
+to add here for those, just `BUILDINGS` + `STRUCTURE_BUILDERS`. Adding a *new* interactive one means: add
+its id to `INTERACTIVE_BUILDINGS`, add a dispatch branch by `structure.id` in the `pointerdown` handler,
+and give it a handler function.
+
 `buildDoor` is a frame (two static posts) plus a `pivot` Group positioned at one post — the leaf mesh is
 offset from the pivot rather than centered on it, so rotating the pivot swings the leaf like a real hinge
 instead of spinning it in place. The pivot is stashed at `mesh.userData.doorPivot` (same "tag the object,
@@ -113,6 +120,13 @@ leaves the actual swing to a per-frame `THREE.MathUtils.lerp` toward 0 or `Math.
 `structures.forEach` as the light-flicker update) — that's what gives it a smooth swing instead of an
 instant snap. Right-click still demolishes a Door for a refund exactly like a Wall; only Storage Chests
 divert right-click to a popup.
+
+The Garden Bed is this codebase's only structure with its own passive timer, and deliberately mirrors the
+resource-node respawn pattern (`tryGather`'s `setTimeout`) rather than inventing a new one:
+`scheduleGardenRegrow` sets `structure.ready = true` (and scales `mesh.userData.plantMesh` back up) after
+`GARDEN_REGROW_MS`, called once at placement and again after every harvest. `tryHarvestGarden` checks
+range, then `structure.ready`, before granting `+1 fiber` — clicking a still-growing bed gives "Still
+growing" feedback rather than silently doing nothing.
 
 ### Removing structures
 
