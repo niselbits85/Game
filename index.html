@@ -27,9 +27,12 @@
     .recipe:hover:not(:disabled) { border-color:var(--accent); }
     .recipe:disabled { opacity:.45; cursor:default; }
     .recipe.done { border-color:var(--good); opacity:.75; }
+    .recipe.selected { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset; }
     .rname { font-weight:650; font-size:13px; }
     .rdesc { font-size:11px; color:var(--ink-2); margin-top:2px; }
     .rcost { font-size:11px; color:var(--accent); margin-top:4px; }
+    #buildings { display:flex; flex-direction:column; gap:8px; }
+    .hint { font-size:11px; color:var(--ink-2); margin:-4px 0 10px; }
   </style>
 </head>
 <body>
@@ -43,6 +46,11 @@
       <div class="panel">
         <h2>Craft</h2>
         <div id="recipes"></div>
+      </div>
+      <div class="panel">
+        <h2>Build</h2>
+        <p class="hint" id="buildHint"></p>
+        <div id="buildings"></div>
       </div>
     </div>
   </div>

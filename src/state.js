@@ -4,9 +4,16 @@ export const RECIPES = [
   { id: 'basket', name: 'Basket', cost: { wood: 3, fiber: 4 }, boosts: 'fiber', desc: 'Doubles fiber per forage' },
 ];
 
+export const BUILDINGS = [
+  { id: 'wall', name: 'Wall', cost: { wood: 3 }, desc: 'A simple fence segment' },
+  { id: 'campfire', name: 'Campfire', cost: { wood: 4, stone: 2 }, desc: 'A cozy fire for your base' },
+  { id: 'chest', name: 'Storage Chest', cost: { wood: 5, fiber: 2 }, desc: 'Marks a storage spot' },
+];
+
 export const state = {
   inventory: { wood: 0, stone: 0, fiber: 0 },
   crafted: { axe: false, pickaxe: false, basket: false },
+  selectedBuilding: null,
 };
 
 const listeners = new Set();
@@ -23,14 +30,28 @@ export function yieldMultiplier(type) {
   return recipe && state.crafted[recipe.id] ? 2 : 1;
 }
 
+export function canAfford(cost) {
+  return Object.entries(cost).every(([res, amt]) => state.inventory[res] >= amt);
+}
+
+export function spendResources(cost) {
+  Object.entries(cost).forEach(([res, amt]) => { state.inventory[res] -= amt; });
+  notify();
+}
+
 export function canCraft(recipe) {
-  return Object.entries(recipe.cost).every(([res, amt]) => state.inventory[res] >= amt);
+  return canAfford(recipe.cost);
 }
 
 export function craft(recipe) {
   if (state.crafted[recipe.id] || !canCraft(recipe)) return false;
-  Object.entries(recipe.cost).forEach(([res, amt]) => { state.inventory[res] -= amt; });
+  spendResources(recipe.cost);
   state.crafted[recipe.id] = true;
   notify();
   return true;
+}
+
+export function selectBuilding(id) {
+  state.selectedBuilding = state.selectedBuilding === id ? null : id;
+  notify();
 }

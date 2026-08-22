@@ -1,5 +1,7 @@
 import * as THREE from 'three';
-import { addResource, yieldMultiplier } from './state.js';
+import {
+  addResource, yieldMultiplier, state, BUILDINGS, canAfford, spendResources, selectBuilding,
+} from './state.js';
 
 const WIDTH = 800;
 const HEIGHT = 600;
@@ -7,6 +9,9 @@ const WORLD_HALF_X = 40;
 const WORLD_HALF_Z = 30;
 const PLAYER_SPEED = 9;
 const INTERACT_RADIUS = 4.2;
+const PLACEMENT_RADIUS = 9;
+const GRID_SIZE = 2;
+const PLACEMENT_MIN_DIST = 1.1;
 const CAMERA_OFFSET = new THREE.Vector3(0, 22, 15);
 const SUN_OFFSET = new THREE.Vector3(8, 16, 6);
 
@@ -56,6 +61,59 @@ function buildBush(color) {
 }
 
 const BUILDERS = { wood: buildTree, stone: buildRock, fiber: buildBush };
+
+function buildWall() {
+  const mesh = new THREE.Mesh(
+    new THREE.BoxGeometry(1.8, 1.0, 0.25),
+    new THREE.MeshStandardMaterial({ color: 0x8a6a45 }),
+  );
+  mesh.position.y = 0.5;
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  return mesh;
+}
+
+function buildCampfire() {
+  const group = new THREE.Group();
+  const rockMat = new THREE.MeshStandardMaterial({ color: 0x5c5c5c, flatShading: true });
+  for (let i = 0; i < 6; i++) {
+    const rock = new THREE.Mesh(new THREE.IcosahedronGeometry(0.18, 0), rockMat);
+    const a = (i / 6) * Math.PI * 2;
+    rock.position.set(Math.cos(a) * 0.5, 0.15, Math.sin(a) * 0.5);
+    rock.castShadow = true;
+    group.add(rock);
+  }
+  const flame = new THREE.Mesh(
+    new THREE.ConeGeometry(0.22, 0.5, 8),
+    new THREE.MeshStandardMaterial({ color: 0xff8a3d, emissive: 0xff5500, emissiveIntensity: 0.6 }),
+  );
+  flame.position.y = 0.35;
+  group.add(flame);
+  const light = new THREE.PointLight(0xffa040, 1.2, 6, 2);
+  light.position.y = 0.5;
+  group.add(light);
+  return group;
+}
+
+function buildChest() {
+  const group = new THREE.Group();
+  const base = new THREE.Mesh(
+    new THREE.BoxGeometry(0.9, 0.5, 0.6),
+    new THREE.MeshStandardMaterial({ color: 0x8a6a45 }),
+  );
+  base.position.y = 0.25;
+  base.castShadow = true;
+  const lid = new THREE.Mesh(
+    new THREE.BoxGeometry(0.95, 0.15, 0.65),
+    new THREE.MeshStandardMaterial({ color: 0x6b4a2f }),
+  );
+  lid.position.y = 0.575;
+  lid.castShadow = true;
+  group.add(base, lid);
+  return group;
+}
+
+const STRUCTURE_BUILDERS = { wall: buildWall, campfire: buildCampfire, chest: buildChest };
 
 export function initGame(container) {
   const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -110,17 +168,50 @@ export function initGame(container) {
   scene.add(rangeRing);
 
   const nodes = spawnNodes(scene);
+  const structures = [];
+
+  const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  const ghostGroup = new THREE.Group();
+  ghostGroup.name = 'placementGhost';
+  ghostGroup.visible = false;
+  scene.add(ghostGroup);
+  let ghostBuiltFor = null;
 
   const keys = new Set();
-  window.addEventListener('keydown', (e) => keys.add(e.code));
+  window.addEventListener('keydown', (e) => {
+    keys.add(e.code);
+    if (e.code === 'Escape' && state.selectedBuilding) selectBuilding(state.selectedBuilding);
+  });
   window.addEventListener('keyup', (e) => keys.delete(e.code));
 
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
-  renderer.domElement.addEventListener('pointerdown', (e) => {
+  let hasPointer = false;
+
+  renderer.domElement.addEventListener('pointermove', (e) => {
     const rect = renderer.domElement.getBoundingClientRect();
     pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
     pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    hasPointer = true;
+  });
+
+  renderer.domElement.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    const rect = renderer.domElement.getBoundingClientRect();
+    pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    hasPointer = true;
+
+    if (state.selectedBuilding) {
+      raycaster.setFromCamera(pointer, camera);
+      const point = new THREE.Vector3();
+      if (raycaster.ray.intersectPlane(groundPlane, point)) {
+        const snapped = snapToGrid(point.x, point.z);
+        tryPlace(state.selectedBuilding, snapped.x, snapped.z, scene, structures, nodes, player);
+      }
+      return;
+    }
+
     raycaster.setFromCamera(pointer, camera);
     const hits = raycaster.intersectObjects(nodes.map((n) => n.mesh), true);
     if (!hits.length) return;
@@ -164,11 +255,41 @@ export function initGame(container) {
     );
     sun.target.position.copy(player.position);
 
+    updateGhost();
+
     renderer.render(scene, camera);
   }
+
+  function updateGhost() {
+    const buildId = state.selectedBuilding;
+    if (!buildId || !hasPointer) {
+      ghostGroup.visible = false;
+      ghostBuiltFor = null;
+      return;
+    }
+    raycaster.setFromCamera(pointer, camera);
+    const point = new THREE.Vector3();
+    if (!raycaster.ray.intersectPlane(groundPlane, point)) {
+      ghostGroup.visible = false;
+      return;
+    }
+    const snapped = snapToGrid(point.x, point.z);
+    if (ghostBuiltFor !== buildId) {
+      ghostGroup.clear();
+      ghostGroup.add(STRUCTURE_BUILDERS[buildId]());
+      ghostBuiltFor = buildId;
+    }
+    ghostGroup.position.set(snapped.x, 0, snapped.z);
+    const def = BUILDINGS.find((b) => b.id === buildId);
+    const inRange = Math.hypot(snapped.x - player.position.x, snapped.z - player.position.z) <= PLACEMENT_RADIUS;
+    const valid = inRange && !isBlocked(snapped.x, snapped.z, structures, nodes) && canAfford(def.cost);
+    tintGhost(ghostGroup, valid ? 0x7fd97f : 0xe86a6a);
+    ghostGroup.visible = true;
+  }
+
   animate();
 
-  return { scene, camera, renderer, player, nodes };
+  return { scene, camera, renderer, player, nodes, structures };
 }
 
 function spawnNodes(scene) {
@@ -208,12 +329,12 @@ function tryGather(node, player, scene) {
   if (!node.available) return;
   const dist = Math.hypot(node.x - player.position.x, node.z - player.position.z);
   if (dist > INTERACT_RADIUS) {
-    floatText(node, scene, 'Too far', '#e86a6a');
+    floatText(scene, node.mesh.position, 'Too far', '#e86a6a');
     return;
   }
   const amount = yieldMultiplier(node.type);
   addResource(node.type, amount);
-  floatText(node, scene, `+${amount} ${node.def.label}`, '#ffe066');
+  floatText(scene, node.mesh.position, `+${amount} ${node.def.label}`, '#ffe066');
 
   node.available = false;
   node.mesh.visible = false;
@@ -223,7 +344,56 @@ function tryGather(node, player, scene) {
   }, node.def.respawnMs);
 }
 
-function floatText(node, scene, msg, color) {
+function snapToGrid(x, z) {
+  return {
+    x: THREE.MathUtils.clamp(Math.round(x / GRID_SIZE) * GRID_SIZE, -WORLD_HALF_X + 1, WORLD_HALF_X - 1),
+    z: THREE.MathUtils.clamp(Math.round(z / GRID_SIZE) * GRID_SIZE, -WORLD_HALF_Z + 1, WORLD_HALF_Z - 1),
+  };
+}
+
+function isBlocked(x, z, structures, nodes) {
+  const occupied = structures.concat(nodes);
+  return occupied.some((p) => Math.hypot(p.x - x, p.z - z) < PLACEMENT_MIN_DIST);
+}
+
+function tintGhost(group, hex) {
+  group.traverse((obj) => {
+    if (obj.isMesh) {
+      obj.material.transparent = true;
+      obj.material.opacity = 0.55;
+      obj.material.color.set(hex);
+      if (obj.material.emissive) obj.material.emissive.set(0x000000);
+    }
+    if (obj.isLight) obj.visible = false;
+  });
+}
+
+function tryPlace(buildId, x, z, scene, structures, nodes, player) {
+  const def = BUILDINGS.find((b) => b.id === buildId);
+  if (!def) return;
+  const marker = new THREE.Vector3(x, 1, z);
+  if (Math.hypot(x - player.position.x, z - player.position.z) > PLACEMENT_RADIUS) {
+    floatText(scene, marker, 'Too far', '#e86a6a');
+    return;
+  }
+  if (isBlocked(x, z, structures, nodes)) {
+    floatText(scene, marker, 'Blocked', '#e86a6a');
+    return;
+  }
+  if (!canAfford(def.cost)) {
+    floatText(scene, marker, 'Not enough resources', '#e86a6a');
+    return;
+  }
+  spendResources(def.cost);
+  const mesh = STRUCTURE_BUILDERS[buildId]();
+  mesh.position.x = x;
+  mesh.position.z = z;
+  scene.add(mesh);
+  structures.push({ id: buildId, mesh, x, z });
+  floatText(scene, marker, `${def.name} built`, '#7fd97f');
+}
+
+function floatText(scene, position, msg, color) {
   const canvas = document.querySelector('#app canvas');
   if (!canvas) return;
   const container = canvas.parentElement;
@@ -235,7 +405,7 @@ function floatText(node, scene, msg, color) {
   const start = performance.now();
   const duration = 750;
   const update = () => {
-    const projected = worldToScreen(node.mesh.position, scene.userData.camera, canvas);
+    const projected = worldToScreen(position, scene.userData.camera, canvas);
     el.style.left = `${projected.x}px`;
     el.style.top = `${projected.y}px`;
     if (performance.now() - start < duration) requestAnimationFrame(update);

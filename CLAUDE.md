@@ -23,18 +23,35 @@ player rather than the whole world, since it only ever needs to cover what's on 
 
 - `src/main.js` — calls `initGame()` to boot the three.js scene into `#app`, and imports `ui.js` to wire
   up the sidebar. No framework — just two independent entry points sharing `state.js`.
-- `src/game.js` — the entire game world: scene/camera/lighting setup, procedural node/player meshes
-  (`buildTree`/`buildRock`/`buildBush`, a `CapsuleGeometry` player — no `assets/` folder, no loaded
-  models), keyboard movement, raycaster-based click-to-gather, node respawn, and the screen-projected
-  floating "+1" pickup text. `RESOURCE_DEFS` at the top controls color/respawn time/count per resource
-  type — add a new type there and give it a builder in `BUILDERS`.
-- `src/state.js` — the single source of truth for inventory counts, crafted tools, and recipes
-  (`RECIPES`). Framework-agnostic on purpose: `game.js` (`addResource`, `yieldMultiplier`) and the DOM UI
-  (`craft`, `canCraft`) read/write through it rather than each other, and `onChange` lets the DOM UI
-  re-render whenever it changes.
-- `src/ui.js` — renders the inventory and crafting panels into the `#inventory`/`#recipes` elements
-  defined in `index.html`, and handles craft button clicks. Plain DOM — the game canvas and the sidebar
-  are two independent renderers kept in sync only through `state.js`.
+- `src/game.js` — the entire game world: scene/camera/lighting setup, procedural node/player/structure
+  meshes (`buildTree`/`buildRock`/`buildBush`, `buildWall`/`buildCampfire`/`buildChest`, a
+  `CapsuleGeometry` player — no `assets/` folder, no loaded models), keyboard movement, raycaster-based
+  click-to-gather, node respawn, structure placement, and the screen-projected floating pickup/feedback
+  text. `RESOURCE_DEFS` at the top controls color/respawn time/count per resource type — add a new type
+  there and give it a builder in `BUILDERS`.
+- `src/state.js` — the single source of truth for inventory counts, crafted tools, recipes (`RECIPES`),
+  placeable structures (`BUILDINGS`), and which one is currently selected for placement
+  (`state.selectedBuilding`). Framework-agnostic on purpose: `game.js` (`addResource`, `yieldMultiplier`,
+  `canAfford`, `spendResources`) and the DOM UI (`craft`, `canCraft`, `selectBuilding`) read/write through
+  it rather than each other, and `onChange` lets the DOM UI re-render whenever it changes.
+- `src/ui.js` — renders the inventory, crafting, and build panels into the `#inventory`/`#recipes`/
+  `#buildings` elements defined in `index.html`, and handles craft/build button clicks. Plain DOM — the
+  game canvas and the sidebar are two independent renderers kept in sync only through `state.js`.
+
+### Building placement
+
+Selecting a structure in the Build panel sets `state.selectedBuilding`; `game.js` reads that flag to
+switch its click handler from gather-mode to placement-mode (see the `pointerdown` listener in
+`initGame`) and to drive a live ghost preview (`updateGhost`, the `placementGhost` group) that follows
+the mouse, snapped to `GRID_SIZE` via `snapToGrid`, tinted green/red by `tintGhost` depending on whether
+`tryPlace`'s three checks would pass: in range of the player (`PLACEMENT_RADIUS`), not overlapping an
+existing node/structure (`isBlocked`, `PLACEMENT_MIN_DIST`), and affordable (`canAfford`). Placing does
+not clear the selection — you stay in placement mode to drop several of the same structure — Escape
+(handled in the `keydown` listener) or re-clicking the same Build button cancels it.
+
+To add a new structure type: add an entry to `BUILDINGS` in `state.js` and a builder function in
+`STRUCTURE_BUILDERS` in `game.js`; placement, cost-checking, and the ghost preview all pick it up
+automatically.
 
 Gather interaction is proximity-based, not click-adjacent: a click raycasts against node meshes to find
 *which* node was clicked, then a separate flat-distance check (`INTERACT_RADIUS`, in world X/Z) against
