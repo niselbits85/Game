@@ -28,25 +28,25 @@ area around the player rather than the whole world, since it only ever needs to 
   up the sidebar. No framework — just two independent entry points sharing `state.js`.
 - `src/game.js` — the entire game world: scene/camera/lighting setup, procedural node/player/structure
   meshes (`buildTree`/`buildRock`/`buildBush`/`buildPlayer` for the world, `buildWall`/`buildCampfire`/
-  `buildChest`/`buildDoor`/`buildWatchtower`/`buildWell`/`buildBench`/`buildGardenBed` for `BUILDINGS` — no
-  `assets/` folder, no loaded models), keyboard movement, raycaster-based click-to-gather, node respawn,
-  structure placement, and the screen-projected floating pickup/feedback text. `RESOURCE_DEFS` at the top
-  controls color/respawn time/count per resource type — add a new type there and give it a builder in
-  `BUILDERS`.
-- `src/state.js` — the single source of truth for inventory counts, crafted tools, recipes (`RECIPES`),
-  placeable structures (`BUILDINGS`), and which one is currently selected for placement
-  (`state.selectedBuilding`). `game.js` (`addResource`, `yieldMultiplier`, `canAfford`, `spendResources`)
-  and the DOM UI (`craft`, `canCraft`, `selectBuilding`) read/write through it rather than each other, and
-  `onChange` lets both re-render/react whenever it changes. `RECIPES` is for one-time permanent player
-  upgrades (gather-boosting tools, the held Torch); `BUILDINGS` is for structures placed and removable in
-  the world — a "buildable" thing that instead attaches to the player and stays forever belongs in
-  `RECIPES`, not `BUILDINGS`.
+  `buildChest`/`buildDoor`/`buildWatchtower`/`buildWell`/`buildBench`/`buildGardenBed`/`buildShop` for
+  `BUILDINGS` — no `assets/` folder, no loaded models), keyboard movement, raycaster-based click-to-gather,
+  node respawn, structure placement, and the screen-projected floating pickup/feedback text. `RESOURCE_DEFS`
+  at the top controls color/respawn time/count per resource type — add a new type there and give it a
+  builder in `BUILDERS`.
+- `src/state.js` — the single source of truth for inventory counts (including `gold`, spent/earned only at
+  the Shop — nothing gathers it directly), crafted tools, recipes (`RECIPES`), placeable structures
+  (`BUILDINGS`), and which one is currently selected for placement (`state.selectedBuilding`). `game.js`
+  (`addResource`, `yieldMultiplier`, `canAfford`, `spendResources`) and the DOM UI (`craft`, `canCraft`,
+  `selectBuilding`) read/write through it rather than each other, and `onChange` lets both re-render/react
+  whenever it changes. `RECIPES` is for one-time permanent player upgrades (gather-boosting tools, the held
+  Torch); `BUILDINGS` is for structures placed and removable in the world — a "buildable" thing that
+  instead attaches to the player and stays forever belongs in `RECIPES`, not `BUILDINGS`.
 - `src/ui.js` — renders the inventory, crafting, and build panels into the `#inventory`/`#recipes`/
   `#buildings` elements defined in `index.html`, and handles craft/build button clicks. Plain DOM — the
   game canvas and the sidebars are two independent renderers kept in sync only through `state.js`.
   `index.html`'s `.sidebar-left` (Inventory+Craft) and `.sidebar-right` (Build) are `position:fixed`
   overlays on top of the full-viewport canvas, each with its own `max-height`/`overflow-y:auto` so a tall
-  panel (Build, with 8 structures) scrolls internally instead of growing past the viewport — `ui.js`
+  panel (Build, with 9 structures) scrolls internally instead of growing past the viewport — `ui.js`
   doesn't care which panel an element ends up in, it only ever queries by the element's own id, so moving
   panels between the two `.sidebar` columns (or adding a third) is a pure `index.html` edit. Craft and
   Build (not Inventory) are collapsible: each wraps its content in `.panel-head`/`.panel-body`, and a
@@ -55,11 +55,15 @@ area around the player rather than the whole world, since it only ever needs to 
   `.panel` on click; the rest is CSS (`.panel.collapsed .panel-body { display:none }` plus a rotating
   arrow). No state.js involvement — collapsed/expanded is presentation-only, not shared game state, and
   doesn't persist across reloads.
-- `src/chestMenu.js` — the popup opened by right-clicking a placed Storage Chest. Self-contained: it
-  owns its own DOM element and lifecycle (`openChestMenu`/`closeChestMenu`), subscribes to `state.js`'s
-  `onChange` for live inventory numbers, and mutates the chest's own `structure.storage` object directly
-  (that per-chest storage isn't part of `state.js` — it lives on the structure record in `game.js`, since
-  `state.js` models one global inventory, not N independent chest inventories).
+- `src/chestMenu.js` and `src/shopMenu.js` — the popups opened by right-clicking a placed Storage Chest or
+  Shop, respectively. Same self-contained shape in both: own DOM element and lifecycle (`open*Menu`/
+  `close*Menu`), subscribe to `state.js`'s `onChange` for live numbers, share the `.popup-*` CSS classes in
+  `index.html` (generic on purpose — anything popup-based should reuse them rather than growing its own
+  `.chest-*`-style one-off names). `chestMenu.js` mutates the chest's own `structure.storage` object
+  directly (that per-chest storage isn't part of `state.js` — it lives on the structure record in
+  `game.js`, since `state.js` models one global inventory, not N independent chest inventories);
+  `shopMenu.js` only ever touches `state.inventory` (including `gold`) since a Shop holds no storage of
+  its own.
 
 ### Gathering
 
@@ -154,10 +158,23 @@ invisible and reused. It returns `true`/`false` (whether it actually removed any
 the player was out of `PLACEMENT_RADIUS`) — `chestMenu.js`'s "Remove chest" button only closes the popup
 on `true`, so a failed removal leaves the menu open with its `Too far` feedback visible.
 
-Storage Chests are the one structure type right-click doesn't demolish directly: the `contextmenu`
-handler special-cases `structure.id === 'chest'` to open `chestMenu.js`'s popup instead. That popup's own
-"Remove chest" button is what calls `tryRemove`, and since it refunds `structure.storage` alongside the
-chest's own build cost, nothing stored inside is lost when a chest is torn down.
+Storage Chests and Shops are the structure types right-click doesn't demolish directly: the `contextmenu`
+handler checks `structure.id` against `POPUP_MENUS` (a `{ chest: openChestMenu, shop: openShopMenu }`
+lookup) and opens that popup instead when there's a match. Both popups' own "Remove" button is what calls
+`tryRemove` — the chest's refunds `structure.storage` alongside its build cost so nothing stored inside is
+lost when it's torn down; the shop has no storage of its own, so removing it only refunds its build cost.
+Adding a third popup-based structure means adding it to `POPUP_MENUS`, not another `if`/`else` branch.
+
+### Trading
+
+The Shop is the only place Gold enters or leaves the game — nothing gathers or crafts it directly.
+`shopMenu.js`'s `SHOP_RATES` gives each resource an asymmetric `{ sell, buy }` pair (e.g. sell 3 Wood for
+1 Gold, but spend 1 Gold to buy back only 2) with `buy` always less than `sell`, specifically so
+round-tripping (sell then immediately buy back) always loses resources overall — there's no free
+arbitrage loop to farm. Its Sell/Buy buttons are simpler than `chestMenu.js`'s deposit/withdraw pair: both
+sides are plain `state.inventory` (`spendResources` one resource, `addResource` the other), with no
+external `structure.storage`-style object to keep in sync, so — unlike the chest — there's no "mutate the
+non-state.js side first" ordering to worry about.
 
 ### Visual style
 

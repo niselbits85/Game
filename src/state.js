@@ -14,10 +14,13 @@ export const BUILDINGS = [
   { id: 'well', name: 'Well', cost: { stone: 6, wood: 2 }, desc: 'A decorative stone well' },
   { id: 'bench', name: 'Bench', cost: { wood: 2 }, desc: 'A simple place to sit' },
   { id: 'garden', name: 'Garden Bed', cost: { wood: 3, fiber: 1 }, desc: 'Click when grown to harvest Fiber' },
+  { id: 'shop', name: 'Shop', cost: { wood: 6, stone: 4 }, desc: 'Right-click to trade resources for Gold' },
 ];
 
 export const state = {
-  inventory: { wood: 0, stone: 0, fiber: 0 },
+  inventory: {
+    wood: 0, stone: 0, fiber: 0, gold: 0,
+  },
   crafted: {
     axe: false, pickaxe: false, basket: false, torch: false,
   },

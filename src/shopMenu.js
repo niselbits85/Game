@@ -2,7 +2,16 @@ import {
   state, onChange, offChange, addResource, spendResources,
 } from './state.js';
 
-const RESOURCES = ['wood', 'stone', 'fiber'];
+// Sell converts `sell` units of a resource into 1 Gold; Buy spends 1 Gold for `buy` units
+// back. `buy` is deliberately less than `sell` for every resource so round-tripping
+// (sell then immediately buy back) always loses resources overall - there's no free
+// arbitrage loop.
+export const SHOP_RATES = {
+  wood: { sell: 3, buy: 2 },
+  stone: { sell: 2, buy: 1 },
+  fiber: { sell: 4, buy: 3 },
+};
+
 const cap = (s) => s[0].toUpperCase() + s.slice(1);
 
 let menuEl = null;
@@ -10,10 +19,10 @@ let currentRenderFn = null;
 let outsideHandler = null;
 
 function escHandler(e) {
-  if (e.key === 'Escape') closeChestMenu();
+  if (e.key === 'Escape') closeShopMenu();
 }
 
-export function closeChestMenu() {
+export function closeShopMenu() {
   if (!menuEl) return;
   menuEl.remove();
   menuEl = null;
@@ -28,60 +37,58 @@ export function closeChestMenu() {
   }
 }
 
-export function openChestMenu(structure, clientX, clientY, { onRemove }) {
-  closeChestMenu();
+export function openShopMenu(structure, clientX, clientY, { onRemove }) {
+  closeShopMenu();
 
   const container = document.getElementById('app');
   const appRect = container.getBoundingClientRect();
   menuEl = document.createElement('div');
   menuEl.className = 'popup-menu';
   const left = Math.min(Math.max(8, clientX - appRect.left + 12), appRect.width - 236);
-  const top = Math.min(Math.max(8, clientY - appRect.top + 12), appRect.height - 220);
+  const top = Math.min(Math.max(8, clientY - appRect.top + 12), appRect.height - 260);
   menuEl.style.left = `${left}px`;
   menuEl.style.top = `${top}px`;
   container.appendChild(menuEl);
 
   function render() {
-    const rows = RESOURCES.map((res) => {
+    const rows = Object.entries(SHOP_RATES).map(([res, rate]) => {
       const invAmt = state.inventory[res];
-      const chestAmt = structure.storage[res];
+      const canSell = invAmt >= rate.sell;
+      const canBuy = state.inventory.gold >= 1;
       return `
         <div class="popup-row">
           <span class="popup-res">${cap(res)}</span>
           <span class="popup-amt">Inv ${invAmt}</span>
-          <button data-dir="deposit" data-res="${res}" title="Move 1 to chest" ${invAmt <= 0 ? 'disabled' : ''}>&rarr;</button>
-          <span class="popup-amt">Chest ${chestAmt}</span>
-          <button data-dir="withdraw" data-res="${res}" title="Move 1 to inventory" ${chestAmt <= 0 ? 'disabled' : ''}>&larr;</button>
+          <button data-dir="sell" data-res="${res}" title="Sell ${rate.sell} ${res} for 1 Gold" ${canSell ? '' : 'disabled'}>Sell ${rate.sell}</button>
+          <button data-dir="buy" data-res="${res}" title="Spend 1 Gold for ${rate.buy} ${res}" ${canBuy ? '' : 'disabled'}>Buy ${rate.buy}</button>
         </div>`;
     }).join('');
 
     menuEl.innerHTML = `
       <div class="popup-head">
-        <span>Storage Chest</span>
+        <span>Shop — ${state.inventory.gold} Gold</span>
         <button class="popup-close" type="button" aria-label="Close">&times;</button>
       </div>
       ${rows}
-      <button class="popup-remove" type="button">Remove chest</button>
+      <button class="popup-remove" type="button">Remove shop</button>
     `;
 
-    menuEl.querySelector('.popup-close').addEventListener('click', closeChestMenu);
+    menuEl.querySelector('.popup-close').addEventListener('click', closeShopMenu);
     menuEl.querySelector('.popup-remove').addEventListener('click', () => {
-      if (onRemove()) closeChestMenu();
+      if (onRemove()) closeShopMenu();
     });
     menuEl.querySelectorAll('button[data-dir]').forEach((btn) => {
       btn.addEventListener('click', () => {
-        // structure.storage isn't part of state.js, so mutate it before the addResource/
-        // spendResources call below - that call's notify() is what triggers our re-render,
-        // and it should see both amounts already consistent when it fires.
         const res = btn.dataset.res;
-        if (btn.dataset.dir === 'deposit') {
-          if (state.inventory[res] <= 0) return;
-          structure.storage[res] += 1;
-          spendResources({ [res]: 1 });
+        const rate = SHOP_RATES[res];
+        if (btn.dataset.dir === 'sell') {
+          if (state.inventory[res] < rate.sell) return;
+          spendResources({ [res]: rate.sell });
+          addResource('gold', 1);
         } else {
-          if (structure.storage[res] <= 0) return;
-          structure.storage[res] -= 1;
-          addResource(res, 1);
+          if (state.inventory.gold < 1) return;
+          spendResources({ gold: 1 });
+          addResource(res, rate.buy);
         }
       });
     });
@@ -92,7 +99,7 @@ export function openChestMenu(structure, clientX, clientY, { onRemove }) {
   render();
 
   outsideHandler = (e) => {
-    if (menuEl && !menuEl.contains(e.target)) closeChestMenu();
+    if (menuEl && !menuEl.contains(e.target)) closeShopMenu();
   };
   setTimeout(() => {
     document.addEventListener('pointerdown', outsideHandler, true);

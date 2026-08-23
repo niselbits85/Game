@@ -14,12 +14,14 @@ you go. Crafting equips it immediately; click it again any time to put it away o
 no need to recraft it.
 
 Use the Build panel to place structures — Wall, Campfire, Storage Chest, Door, Watchtower, Well, Bench,
-or Garden Bed — near yourself. Pick one, then click the ground: a green preview means the spot is valid,
-red means it's too far, blocked by something, or you can't afford it. Press R to rotate the preview 90°
-(handy for lining up Walls and Doors), Escape or click the selected structure again to cancel.
-Right-click any placed structure to remove it and get its resources back — except a Storage Chest, where
-right-click opens it instead: a popup lets you move resources between your inventory and the chest, and
-remove the chest itself (refunding both its build cost and anything still stored inside). Left-click a
+Garden Bed, or Shop — near yourself. Pick one, then click the ground: a green preview means the spot is
+valid, red means it's too far, blocked by something, or you can't afford it. Press R to rotate the
+preview 90° (handy for lining up Walls and Doors), Escape or click the selected structure again to
+cancel. Right-click any placed structure to remove it and get its resources back — except a Storage
+Chest or a Shop, where right-click opens a popup instead: the Chest's lets you move resources between
+your inventory and the chest; the Shop's lets you trade Wood, Stone, or Fiber for Gold and back (buying
+back is always a worse rate than selling, so there's no free loop). Either popup can also remove its
+structure, refunding its build cost — the Chest also refunds anything still stored inside. Left-click a
 placed Door to swing it open or closed, or a grown Garden Bed to harvest a Fiber from it — freshly
 planted or just-harvested beds need a little time to regrow before they can be picked again.
 

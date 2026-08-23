@@ -3,6 +3,7 @@ import {
   addResource, yieldMultiplier, state, BUILDINGS, canAfford, spendResources, selectBuilding, onChange,
 } from './state.js';
 import { openChestMenu } from './chestMenu.js';
+import { openShopMenu } from './shopMenu.js';
 
 const WORLD_HALF_X = 40;
 const WORLD_HALF_Z = 30;
@@ -148,6 +149,37 @@ function buildChest() {
   return group;
 }
 
+function buildShop() {
+  const group = new THREE.Group();
+  const counter = new THREE.Mesh(
+    new THREE.BoxGeometry(1.2, 0.5, 0.6),
+    new THREE.MeshStandardMaterial({ color: 0x8a6a45 }),
+  );
+  counter.position.y = 0.25;
+  counter.castShadow = true;
+  counter.receiveShadow = true;
+
+  const postMat = new THREE.MeshStandardMaterial({ color: 0x6b4a2f });
+  const postGeo = new THREE.BoxGeometry(0.1, 1.1, 0.1);
+  const postL = new THREE.Mesh(postGeo, postMat);
+  postL.position.set(-0.55, 1.05, -0.25);
+  postL.castShadow = true;
+  const postR = new THREE.Mesh(postGeo, postMat);
+  postR.position.set(0.55, 1.05, -0.25);
+  postR.castShadow = true;
+
+  const awning = new THREE.Mesh(
+    new THREE.BoxGeometry(1.4, 0.1, 0.7),
+    new THREE.MeshStandardMaterial({ color: 0xd9a441 }),
+  );
+  awning.position.set(0, 1.55, -0.15);
+  awning.rotation.x = -0.2;
+  awning.castShadow = true;
+
+  group.add(counter, postL, postR, awning);
+  return group;
+}
+
 // A GRID_SIZE-wide frame with a leaf that swings on a hinge (a pivot Group positioned at
 // the left post, containing the leaf offset to the right) rather than rotating in place -
 // see the doorOpen lerp in animate(). The pivot is stashed on userData so that code (and
@@ -288,9 +320,11 @@ const STRUCTURE_BUILDERS = {
   well: buildWell,
   bench: buildBench,
   garden: buildGardenBed,
+  shop: buildShop,
 };
 const LINE_ALIGNED_BUILDINGS = new Set(['wall', 'door']);
 const INTERACTIVE_BUILDINGS = new Set(['door', 'garden']);
+const POPUP_MENUS = { chest: openChestMenu, shop: openShopMenu };
 
 // Attached directly to the player group (not placed in the world) whenever the Torch is
 // equipped - see syncHeldTorch() in initGame. Boxy + toon-shaded to match buildPlayer.
@@ -470,13 +504,13 @@ export function initGame(container) {
     const structure = obj.userData.structure;
     if (!structure) return;
 
-    if (structure.id === 'chest') {
+    if (structure.id in POPUP_MENUS) {
       const dist = Math.hypot(structure.x - player.position.x, structure.z - player.position.z);
       if (dist > PLACEMENT_RADIUS) {
         floatText(scene, structure.mesh.position, 'Too far', '#e86a6a');
         return;
       }
-      openChestMenu(structure, e.clientX, e.clientY, {
+      POPUP_MENUS[structure.id](structure, e.clientX, e.clientY, {
         onRemove: () => tryRemove(structure, player, scene, structures),
       });
     } else {
