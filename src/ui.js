@@ -68,5 +68,9 @@ buildingsEl.addEventListener('click', (e) => {
   selectBuilding(btn.dataset.build);
 });
 
+document.querySelectorAll('.panel-head').forEach((head) => {
+  head.addEventListener('click', () => head.closest('.panel').classList.toggle('collapsed'));
+});
+
 onChange(render);
 render();

@@ -48,7 +48,13 @@ area around the player rather than the whole world, since it only ever needs to 
   overlays on top of the full-viewport canvas, each with its own `max-height`/`overflow-y:auto` so a tall
   panel (Build, with 8 structures) scrolls internally instead of growing past the viewport — `ui.js`
   doesn't care which panel an element ends up in, it only ever queries by the element's own id, so moving
-  panels between the two `.sidebar` columns (or adding a third) is a pure `index.html` edit.
+  panels between the two `.sidebar` columns (or adding a third) is a pure `index.html` edit. Craft and
+  Build (not Inventory) are collapsible: each wraps its content in `.panel-head`/`.panel-body`, and a
+  single delegated listener set up once in `ui.js` (not inside `render()` — the header markup is static,
+  only the panels' inner content gets replaced each render) toggles a `.collapsed` class on the ancestor
+  `.panel` on click; the rest is CSS (`.panel.collapsed .panel-body { display:none }` plus a rotating
+  arrow). No state.js involvement — collapsed/expanded is presentation-only, not shared game state, and
+  doesn't persist across reloads.
 - `src/chestMenu.js` — the popup opened by right-clicking a placed Storage Chest. Self-contained: it
   owns its own DOM element and lifecycle (`openChestMenu`/`closeChestMenu`), subscribes to `state.js`'s
   `onChange` for live inventory numbers, and mutates the chest's own `structure.storage` object directly

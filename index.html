@@ -22,6 +22,14 @@
     .panel { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:14px;
       box-shadow:0 10px 28px rgba(0,0,0,.5); }
     .panel h2 { margin:0 0 10px; font-size:13px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-2); }
+    .panel-head { display:flex; align-items:center; justify-content:space-between; gap:8px;
+      cursor:pointer; user-select:none; }
+    .panel-head h2 { margin:0 0 10px; }
+    .collapse-arrow { flex:0 0 auto; color:var(--ink-2); font-size:10px; margin-bottom:10px;
+      transition:transform .15s ease; }
+    .panel.collapsed .panel-head h2, .panel.collapsed .collapse-arrow { margin-bottom:0; }
+    .panel.collapsed .collapse-arrow { transform:rotate(-90deg); }
+    .panel.collapsed .panel-body { display:none; }
     .stat { display:flex; justify-content:space-between; padding:4px 0; font-variant-numeric:tabular-nums; }
     .stat .label { color:var(--ink-2); }
     .stat .val { font-weight:650; }
@@ -75,16 +83,26 @@
       <div id="inventory"></div>
     </div>
     <div class="panel">
-      <h2>Craft</h2>
-      <div id="recipes"></div>
+      <div class="panel-head">
+        <h2>Craft</h2>
+        <span class="collapse-arrow">&#9662;</span>
+      </div>
+      <div class="panel-body">
+        <div id="recipes"></div>
+      </div>
     </div>
   </div>
   <div class="sidebar sidebar-right">
     <div class="panel">
-      <h2>Build</h2>
-      <p class="hint" id="buildHint"></p>
-      <div id="buildings"></div>
-      <p class="hint" style="margin:10px 0 0">Right-click any placed structure to remove it (a Chest opens its storage instead). Click a Door to open or close it, or a grown Garden Bed to harvest Fiber.</p>
+      <div class="panel-head">
+        <h2>Build</h2>
+        <span class="collapse-arrow">&#9662;</span>
+      </div>
+      <div class="panel-body">
+        <p class="hint" id="buildHint"></p>
+        <div id="buildings"></div>
+        <p class="hint" style="margin:10px 0 0">Right-click any placed structure to remove it (a Chest opens its storage instead). Click a Door to open or close it, or a grown Garden Bed to harvest Fiber.</p>
+      </div>
     </div>
   </div>
   <script type="module" src="/src/main.js"></script>
