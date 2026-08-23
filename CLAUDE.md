@@ -15,11 +15,14 @@ There is no lint or test tooling configured.
 
 A 3D, top-down resource-gathering game (walk around, click nodes to collect, craft tools) built with
 [three.js](https://threejs.org) (an angled `PerspectiveCamera` that follows the player at a fixed offset,
-WASD moves the player in screen-relative X/Z) plus a plain DOM sidebar for inventory/crafting UI, wired
-together with Vite. The world (`WORLD_HALF_X`/`WORLD_HALF_Z`) is larger than one screen — the camera and
-directional light both track `player.position` every frame (constant `CAMERA_OFFSET`/`SUN_OFFSET`) so the
-player stays centered while exploring; the light's shadow frustum is sized to a fixed area around the
-player rather than the whole world, since it only ever needs to cover what's on screen.
+WASD moves the player in screen-relative X/Z) plus plain DOM sidebar overlays for inventory/crafting UI,
+wired together with Vite. The canvas fills the whole browser window (`#app` is `position:fixed; inset:0`)
+and the two `.sidebar` panels float over it at fixed corners rather than pushing it — see `initGame`'s
+`resize` listener, which keeps `renderer`/`camera.aspect` in sync with `container.clientWidth/Height` on
+every resize, not just at startup. The world (`WORLD_HALF_X`/`WORLD_HALF_Z`) is larger than one screen —
+the camera and directional light both track `player.position` every frame (constant `CAMERA_OFFSET`/
+`SUN_OFFSET`) so the player stays centered while exploring; the light's shadow frustum is sized to a fixed
+area around the player rather than the whole world, since it only ever needs to cover what's on screen.
 
 - `src/main.js` — calls `initGame()` to boot the three.js scene into `#app`, and imports `ui.js` to wire
   up the sidebar. No framework — just two independent entry points sharing `state.js`.
@@ -41,10 +44,11 @@ player rather than the whole world, since it only ever needs to cover what's on 
 - `src/ui.js` — renders the inventory, crafting, and build panels into the `#inventory`/`#recipes`/
   `#buildings` elements defined in `index.html`, and handles craft/build button clicks. Plain DOM — the
   game canvas and the sidebars are two independent renderers kept in sync only through `state.js`.
-  `index.html`'s layout is three columns (`.sidebar` on the left holding Inventory+Craft, `#app` centered,
-  a second `.sidebar` on the right holding Build) — `ui.js` doesn't care which physical column an element
-  ends up in, it only ever queries by the element's own id, so rearranging panels between the two
-  `.sidebar` columns is a pure `index.html` edit.
+  `index.html`'s `.sidebar-left` (Inventory+Craft) and `.sidebar-right` (Build) are `position:fixed`
+  overlays on top of the full-viewport canvas, each with its own `max-height`/`overflow-y:auto` so a tall
+  panel (Build, with 8 structures) scrolls internally instead of growing past the viewport — `ui.js`
+  doesn't care which panel an element ends up in, it only ever queries by the element's own id, so moving
+  panels between the two `.sidebar` columns (or adding a third) is a pure `index.html` edit.
 - `src/chestMenu.js` — the popup opened by right-clicking a placed Storage Chest. Self-contained: it
   owns its own DOM element and lifecycle (`openChestMenu`/`closeChestMenu`), subscribes to `state.js`'s
   `onChange` for live inventory numbers, and mutates the chest's own `structure.storage` object directly
@@ -199,11 +203,17 @@ the one-time `craft()` does.
 
 - This folder is a git repository scoped to itself — do not run `git init` in a parent directory that
   contains unrelated files (e.g. the user's home directory).
-- Either `.sidebar` column (there are two — see `src/ui.js` above) can end up taller than a short
-  viewport, especially the Build one now that it lists 8 structures. In headless tests, clicking a
-  below-the-fold sidebar button can auto-scroll the page and invalidate an already-captured canvas
-  `boundingBox()` — re-measure it after such a click, or use a locator's relative-position click instead
-  of raw page coordinates. `#app` also has `flex-shrink:0` specifically so the canvas never gets visually
-  squeezed narrower than its logical 800px box when the three columns don't all fit the viewport width —
-  without that, coordinates computed from the canvas's true size can silently stop matching what's
-  actually rendered.
+- `html, body` are `overflow:hidden` and both `.sidebar` panels are `position:fixed` with their own
+  `max-height`/`overflow-y:auto`, specifically so a tall panel (Build, with 8 structures) scrolls
+  internally instead of ever growing the *page* — the canvas fills the full, unscrolled viewport
+  (`#app { position:fixed; inset:0 }`) no matter how long the sidebars get. This was a real problem before
+  the full-viewport layout: a below-the-fold sidebar button could auto-scroll the page in headless tests
+  and invalidate an already-captured canvas `boundingBox()`. Still good practice in any headless test to
+  re-measure `boundingBox()` after DOM-changing actions rather than trusting a cached one, or use a
+  locator's relative-position click instead of raw page coordinates — but the page itself scrolling out
+  from under the canvas shouldn't be the cause anymore.
+- The canvas is sized from `container.clientWidth/clientHeight` at `initGame()`, and `camera.aspect` is
+  kept in sync on every `resize` event (see `initGame`'s `resize` listener) — there's no fixed pixel
+  size anywhere. If you add a headless test that changes the viewport size mid-test (`setViewportSize`),
+  give the resize listener a beat (e.g. `waitForTimeout`) before trusting `canvas.getBoundingClientRect()`
+  or reprojecting world coordinates, since both only update after that listener fires.

@@ -4,8 +4,6 @@ import {
 } from './state.js';
 import { openChestMenu } from './chestMenu.js';
 
-const WIDTH = 800;
-const HEIGHT = 600;
 const WORLD_HALF_X = 40;
 const WORLD_HALF_Z = 30;
 const PLAYER_SPEED = 9;
@@ -316,7 +314,7 @@ function buildHeldTorch() {
 
 export function initGame(container) {
   const renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setSize(WIDTH, HEIGHT);
+  renderer.setSize(container.clientWidth, container.clientHeight);
   renderer.shadowMap.enabled = true;
   container.appendChild(renderer.domElement);
 
@@ -324,7 +322,7 @@ export function initGame(container) {
   scene.background = DAY_BG.clone();
   scene.fog = new THREE.Fog(DAY_BG.getHex(), DAY_FOG.near, DAY_FOG.far);
 
-  const camera = new THREE.PerspectiveCamera(45, WIDTH / HEIGHT, 0.1, 100);
+  const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
   camera.position.copy(CAMERA_OFFSET);
   camera.lookAt(0, 0, 0);
   scene.userData.camera = camera;
@@ -407,6 +405,14 @@ export function initGame(container) {
     if (e.code === 'KeyR' && state.selectedBuilding) placementRotation = (placementRotation + 1) % 4;
   });
   window.addEventListener('keyup', (e) => keys.delete(e.code));
+
+  window.addEventListener('resize', () => {
+    const w = container.clientWidth;
+    const h = container.clientHeight;
+    renderer.setSize(w, h);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  });
 
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
@@ -842,5 +848,3 @@ function worldToScreen(position, camera, canvas) {
     y: (-vector.y * 0.5 + 0.5) * canvas.clientHeight,
   };
 }
-
-export { WIDTH, HEIGHT };
