@@ -12,6 +12,7 @@ const INTERACT_RADIUS = 4.2;
 const PLACEMENT_RADIUS = 9;
 const GRID_SIZE = 2;
 const PLACEMENT_MIN_DIST = 1.1;
+const STRUCTURE_COLLISION_RADIUS = 1.1;
 const NODE_MARGIN = 2;
 const NODE_MIN_DIST = 2.4;
 const CAMERA_OFFSET = new THREE.Vector3(0, 22, 15);
@@ -532,8 +533,12 @@ export function initGame(container) {
     const dz = (down ? 1 : 0) - (up ? 1 : 0);
     if (dx !== 0 || dz !== 0) {
       const len = Math.hypot(dx, dz);
-      player.position.x = THREE.MathUtils.clamp(player.position.x + (dx / len) * PLAYER_SPEED * dt, -WORLD_HALF_X + 0.5, WORLD_HALF_X - 0.5);
-      player.position.z = THREE.MathUtils.clamp(player.position.z + (dz / len) * PLAYER_SPEED * dt, -WORLD_HALF_Z + 0.5, WORLD_HALF_Z - 0.5);
+      const nextX = THREE.MathUtils.clamp(player.position.x + (dx / len) * PLAYER_SPEED * dt, -WORLD_HALF_X + 0.5, WORLD_HALF_X - 0.5);
+      const nextZ = THREE.MathUtils.clamp(player.position.z + (dz / len) * PLAYER_SPEED * dt, -WORLD_HALF_Z + 0.5, WORLD_HALF_Z - 0.5);
+      // Resolved per axis (not as a single diagonal step) so bumping into a wall while
+      // moving diagonally slides you along it instead of stopping you dead.
+      if (!structureBlocksAt(nextX, player.position.z, structures)) player.position.x = nextX;
+      if (!structureBlocksAt(player.position.x, nextZ, structures)) player.position.z = nextZ;
     }
     rangeRing.position.x = player.position.x;
     rangeRing.position.z = player.position.z;
@@ -759,6 +764,17 @@ function resolvePlacement(buildId, x, z, rotationSteps) {
 function isBlocked(x, z, structures, nodes) {
   const occupied = structures.concat(nodes);
   return occupied.some((p) => Math.hypot(p.x - x, p.z - z) < PLACEMENT_MIN_DIST);
+}
+
+// Every placed structure is solid to the player except an open Door - it's the same
+// circular-footprint approximation isBlocked() uses for placement spacing, just applied to
+// player movement instead. Resource nodes deliberately aren't included here (only
+// structures block).
+function structureBlocksAt(x, z, structures) {
+  return structures.some((s) => {
+    if (s.id === 'door' && s.doorOpen) return false;
+    return Math.hypot(s.x - x, s.z - z) < STRUCTURE_COLLISION_RADIUS;
+  });
 }
 
 function tintGhost(group, hex) {

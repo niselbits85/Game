@@ -1,7 +1,10 @@
+import * as THREE from 'three';
 import { initGame } from './game.js';
 import './ui.js';
 
 const game = initGame(document.getElementById('app'));
+window.__debug = game;
+window.__THREE = THREE;
 
 const dayNightEl = document.getElementById('dayNight');
 setInterval(() => {
